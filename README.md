@@ -166,7 +166,7 @@ interpreter; the browser runner otherwise uses `.venv`, then `python`.
 
 ## CI and further documentation
 
-- [Hosted dashboard on Render (results uploaded from GitHub Actions)](docs/HOSTING.md)
+- [Hosted dashboard on Render + Neon (results uploaded from GitHub Actions)](docs/HOSTING.md)
 - [Windows 11 setup in detail](docs/SETUP_WINDOWS.md)
 - [Required GitHub security check setup](docs/CI_SETUP.md)
 - [Architecture and API](docs/ARCHITECTURE.md)
@@ -181,8 +181,9 @@ required status check in GitHub settings to block merges; the workflow alone
 cannot enforce branch protection. The security job scans all pull requests.
 
 For a private web dashboard, [`render.yaml`](render.yaml) deploys a view-only
-copy to Render: GitHub Actions scans your repositories and uploads only the
-sanitized report, and you sign in with a token. The hosted copy never scans or
+copy to Render, with its data in a Neon Postgres database: GitHub Actions scans
+your repositories and uploads only the sanitized report, and you sign in with a
+token. The hosted copy never scans or
 clones code, and it uses one shared token rather than per-user accounts. See
 [docs/HOSTING.md](docs/HOSTING.md).
 

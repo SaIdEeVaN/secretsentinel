@@ -1,15 +1,15 @@
-# Hosted dashboard on Render
+# Hosted dashboard on Render + Neon
 
 A private web dashboard that shows scan results for your GitHub repositories.
 **The server never scans or clones code.** GitHub Actions scans each repository
 and uploads only the sanitized report.
 
 ```text
-GitHub Actions (your repo)                      Render
-┌──────────────────────────────┐   HTTPS POST   ┌──────────────────────────────┐   ┌──────────────┐
-│ dashboard-upload.yml         │ ─────────────▶ │ secretsentinel-dashboard     │──▶│ Postgres     │
-│  scan main (tree + history)  │  INGEST_TOKEN  │  FastAPI API + React UI      │   │ (private)    │
-│  upload_report.py            │                │  sign-in with API_TOKEN      │   └──────────────┘
+GitHub Actions (your repo)                      Render                                 Neon
+┌──────────────────────────────┐   HTTPS POST   ┌──────────────────────────────┐  TLS  ┌──────────────┐
+│ dashboard-upload.yml         │ ─────────────▶ │ secretsentinel-dashboard     │──────▶│ Postgres     │
+│  scan main (tree + history)  │  INGEST_TOKEN  │  FastAPI API + React UI      │ DB_URL│ (Neon)       │
+│  upload_report.py            │                │  sign-in with API_TOKEN      │       └──────────────┘
 └──────────────────────────────┘                └──────────────────────────────┘
 ```
 
@@ -20,19 +20,44 @@ lines (the ingest endpoint rejects any report that is not the strict
 
 ## Plans and limits
 
-`render.yaml` uses free plans:
+Both use free plans:
 
-- **Web service (free):** sleeps after 15 minutes without traffic; the next visit
-  or upload takes about a minute to wake it. The upload script retries for that.
-- **Postgres (free):** 1 GB, and **Render deletes it 30 days after creation**
-  (14-day grace period) unless you upgrade it. Upgrading keeps the data: Render
-  dashboard → `secretsentinel-db` → Upgrade.
+- **Render web service (free):** sleeps after 15 minutes without traffic; the
+  next visit or upload takes about a minute to wake it. The upload script
+  retries for that.
+- **Neon Postgres (free):** does not expire. Storage is small (0.5 GB per
+  project at the time of writing), which is plenty: the dashboard stores only
+  rule IDs, locations and counts. The compute scales to zero when idle and
+  resumes on the next query in under a second; the app reconnects
+  automatically (`pool_pre_ping`).
+
+## 0. Create the Neon database (once)
+
+In the [Neon console](https://console.neon.tech):
+
+1. **New project**, region close to the Render service (the Blueprint uses
+   Render's `singapore` region, so `AWS Asia Pacific (Singapore)`).
+2. **Roles → New role** `secretsentinel_app`. Don't use the `neondb_owner`
+   role: the app needs no superuser rights.
+3. **Databases → New database** `secretsentinel`, owner `secretsentinel_app`.
+   Owning the database lets the app create its own tables on first start;
+   no migration step is needed.
+4. **Connect** → database `secretsentinel`, role `secretsentinel_app` → copy
+   the connection string. Either the direct or the pooled (`-pooler`) host
+   works; keep `sslmode=require`.
+
+The string looks like
+`postgresql://secretsentinel_app:<password>@ep-xxx.<region>.aws.neon.tech/secretsentinel?sslmode=require&channel_binding=require`.
+It contains the password: paste it only into Render, never into the
+repository, an issue or a chat.
 
 ## 1. Deploy (once)
 
-Render dashboard → **New → Blueprint** → choose this repository → **Apply**.
-Render reads `render.yaml`, creates the database and the web service, and
-builds the dashboard. Pushes to `main` redeploy automatically.
+Render dashboard → **New → Blueprint** → choose this repository. Render
+reads `render.yaml` and asks for `DB_URL`: paste the Neon connection string,
+then **Apply**. It creates the web service and builds the dashboard; the app
+creates its tables in Neon on first start. Pushes to `main` redeploy
+automatically, and Blueprint syncs never overwrite `DB_URL`.
 
 The web service gets these settings from the Blueprint:
 
@@ -40,7 +65,7 @@ The web service gets these settings from the Blueprint:
 |---|---|
 | `API_TOKEN` | Generated. Sign-in token for the dashboard. |
 | `INGEST_TOKEN` | Generated. Used only by CI to upload reports. Cannot read the dashboard. |
-| `DB_URL` | The private Postgres connection string. |
+| `DB_URL` | The Neon connection string (entered by you; `sync: false`). |
 | `HOST=0.0.0.0`, `ALLOW_REMOTE=true`, `APP_ENV=production` | Remote mode; the server refuses to start remotely without `API_TOKEN`. |
 
 `SCAN_ROOT_ALLOWLIST` is deliberately unset, so the hosted copy can't scan its
@@ -84,12 +109,21 @@ value, e.g. `python -c "import secrets; print(secrets.token_urlsafe(32))"`) →
 Save (the service restarts). Update the GitHub secret after changing
 `INGEST_TOKEN`.
 
+To rotate the **database password**: Neon console → Roles →
+`secretsentinel_app` → Reset password → copy the new connection string →
+Render → Environment → `DB_URL` → Save. The service restarts with the new
+password; the old one stops working immediately, so do both steps together.
+
 ## Security notes
 
 - One shared `API_TOKEN` gives full dashboard access (triage, suppressions,
   deleting repositories). There are no per-user accounts; share it only with
   people who should have that access.
-- The database has an empty IP allowlist, so only Render services connect.
+- The database is reachable from the internet but only over TLS and with the
+  `secretsentinel_app` password; that role is not a superuser and can't create
+  roles or other databases. Neon's paid plans add an IP allowlist if you want
+  to restrict connections further. Neon also keeps point-in-time history, so
+  an accidental delete can be restored from the console.
 - Remote mode enables HSTS and rate limiting, disables the OpenAPI docs, and
   keeps the loopback defaults (Host check, Origin check, JSON-only writes).
 - Rate limiting is per client address as seen by the server; behind Render's
@@ -105,4 +139,6 @@ Save (the service restarts). Update the GitHub secret after changing
 | Dashboard says the token was not accepted | Copy `API_TOKEN` again (not `INGEST_TOKEN`). |
 | `400 Invalid host header` on a custom domain | Add the domain to `TRUSTED_HOSTS`. |
 | Build fails at `npm run build` with a Node version error | Set `NODE_VERSION` to a current LTS (22 or newer) on the service. |
-| History disappeared after a month | The free database expired; upgrade it before day 30 to keep data. |
+| Deploy fails with `password authentication failed` | `DB_URL` is wrong or the Neon password was reset; copy the connection string again. |
+| Deploy fails with `permission denied for schema public` | The role in `DB_URL` doesn't own the `secretsentinel` database; make it the owner (step 0.3). |
+| First request after a long idle period is slow | Both Render and Neon were asleep; later requests are fast. |
