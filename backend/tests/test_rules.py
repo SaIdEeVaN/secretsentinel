@@ -186,7 +186,10 @@ def test_crlf_checkout_has_same_digest_and_clean_config(tmp_path):
 def test_scan_works_with_crlf_ruleset(tmp_path, gitleaks_bin):
     target = tmp_path / "t"
     target.mkdir()
-    (target / "a.env").write_text("DEPLOYER_PRIVATE_KEY=0x" + "0123456789abcdef" * 4 + "\n")
+    from secretsentinel.fixtures import synth
+
+    # Generated at runtime (not a constant the compiler could fold into the .pyc).
+    (target / "a.env").write_text("DEPLOYER_PRIVATE_KEY=0x" + synth("hex64", "crlf-ruleset") + "\n")
     rs = load_ruleset(_crlf_rules_copy(tmp_path))
     o = run_scan(ScanRequest(target=target, mode="dir"), Settings(gitleaks_path=gitleaks_bin, db_url="sqlite://"), ruleset=rs)
     assert o.status == "completed", o.error_code
