@@ -71,8 +71,11 @@ class Ruleset:
         self.web3_rules_path = rules_dir / WEB3_RULES_FILE
         self.mapping_path = rules_dir / MAPPING_FILE
         try:
-            self._toml_bytes = self.web3_rules_path.read_bytes()
-            self._mapping_bytes = self.mapping_path.read_bytes()
+            # Normalise line endings: Windows checkouts may convert files to CRLF.
+            # This keeps the ruleset digest identical across platforms, and the
+            # generated config is later written as raw bytes (no CR doubling).
+            self._toml_bytes = self.web3_rules_path.read_bytes().replace(b"\r\n", b"\n")
+            self._mapping_bytes = self.mapping_path.read_bytes().replace(b"\r\n", b"\n")
             self.toml = tomllib.loads(self._toml_bytes.decode("utf-8"))
             self.mapping = yaml.safe_load(self._mapping_bytes.decode("utf-8"))
         except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, yaml.YAMLError):

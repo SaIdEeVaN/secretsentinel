@@ -8,7 +8,7 @@ deployments or Sepolia calls were used.
 
 | Check | Observed result |
 |---|---|
-| `cd backend && python -m pytest -q` (real Gitleaks) | 204 passed, 3 skipped (the `chain` interop tests, run separately below) |
+| `cd backend && python -m pytest -q` (real Gitleaks) | 206 passed, 3 skipped (the `chain` interop tests, run separately below) |
 | `pytest -m chain tests/test_chain_interop.py` against a local Hardhat node | 3 passed |
 | `cd frontend && npm test` | 19 passed across 3 files |
 | `cd frontend && npm run test:e2e` | Production build passed; 6 browser tests passed (desktop + 390 px phone); 30/30 with `--repeat-each 5` |
@@ -54,15 +54,26 @@ performance.
   wrong-chain rejection, and registration/verification against the deployed
   `ScanRegistry` on a local chain.
 
-## Defect found during the merge
+## Defects found and fixed during the merge
 
-The browser suite failed on a GitHub runner (but not locally) for the Codex
-branch: a client reading immediately after a write could see stale data. Root
-cause: FastAPI runs a request-scoped `yield` dependency's teardown - where the
-SQLite session commits - only after the response has been sent. All routes now
-use `Depends(get_db, scope="function")` (FastAPI >= 0.121), which commits
-before responding, and `test_db_sessions_commit_before_the_response_is_sent`
-guards every route (it flags 6 routes on the pre-fix code).
+Both surfaced only on GitHub-hosted runners, not in local runs:
+
+1. **Stale reads after writes (browser suite, Linux runner).** FastAPI runs a
+   request-scoped `yield` dependency's teardown - where the SQLite session
+   commits - only after the response has been sent, so a client reading
+   immediately after a write could see old data. All routes now use
+   `Depends(get_db, scope="function")` (FastAPI >= 0.121), which commits before
+   responding; `test_db_sessions_commit_before_the_response_is_sent` guards
+   every route (it flags 6 routes on the pre-fix code). The browser job passed
+   on GitHub after the fix.
+2. **Every real scan failed with `INVALID_CONFIG` on Windows.** Windows
+   checkouts convert `rules/*.toml` to CRLF; writing the generated config in
+   text mode turned that into `\r\r\n`, which Gitleaks rejects ("invalid
+   character in comment", reproduced locally). The ruleset is now normalised to
+   LF on load (so the ruleset digest is identical on every OS), the config is
+   written as bytes, and `.gitattributes` keeps scanner inputs LF. Guarded by
+   `test_crlf_checkout_has_same_digest_and_clean_config` and
+   `test_scan_works_with_crlf_ruleset`.
 
 ## Not established by these local checks
 

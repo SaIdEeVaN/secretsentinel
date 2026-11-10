@@ -163,3 +163,31 @@ def test_fixture_templates_contain_no_raw_values():
             text = path.read_text(encoding="utf-8")
             assert "{{SYNTH:" in text or path.suffix == ".tmpl", path
             assert not hex64.search(text), f"raw 64-hex value committed in {path}"
+
+
+def _crlf_rules_copy(tmp_path):
+    copy = tmp_path / "rules-crlf"
+    copy.mkdir()
+    for name in ("web3_rules.toml", "severity_mapping.yaml"):
+        data = (RULES_DIR / name).read_bytes().replace(b"\r\n", b"\n")
+        (copy / name).write_bytes(data.replace(b"\n", b"\r\n"))
+    return copy
+
+
+def test_crlf_checkout_has_same_digest_and_clean_config(tmp_path):
+    """Windows checkouts convert to CRLF; the digest must not change and the
+    generated config must not contain CR (regression: Windows CI INVALID_CONFIG)."""
+    crlf = load_ruleset(_crlf_rules_copy(tmp_path))
+    assert crlf.digest == load_ruleset().digest
+    assert "\r" not in crlf.effective_config(("node_modules",))
+
+
+@pytest.mark.gitleaks
+def test_scan_works_with_crlf_ruleset(tmp_path, gitleaks_bin):
+    target = tmp_path / "t"
+    target.mkdir()
+    (target / "a.env").write_text("DEPLOYER_PRIVATE_KEY=0x" + "0123456789abcdef" * 4 + "\n")
+    rs = load_ruleset(_crlf_rules_copy(tmp_path))
+    o = run_scan(ScanRequest(target=target, mode="dir"), Settings(gitleaks_path=gitleaks_bin, db_url="sqlite://"), ruleset=rs)
+    assert o.status == "completed", o.error_code
+    assert o.blocking_findings == 1

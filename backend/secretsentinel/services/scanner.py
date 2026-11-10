@@ -382,7 +382,9 @@ def run_scan(req: ScanRequest, settings: Settings, ruleset: Ruleset | None = Non
             ignore_dir = workdir / "no-ignore"
             ignore_dir.mkdir()
             config_path = workdir / "effective-config.toml"
-            config_path.write_text(ruleset.effective_config(req.policy.exclude_paths), encoding="utf-8")
+            # write_bytes, not write_text: text mode on Windows would turn "\n" into
+            # "\r\n" again, and Gitleaks rejects the resulting "\r\r\n" config.
+            config_path.write_bytes(ruleset.effective_config(req.policy.exclude_paths).encode("utf-8"))
             os.chmod(config_path, 0o600)
             findings: list[SafeFinding] = []
             for mode in [m for m in ("dir", "git") if req.mode in (m, "both")]:

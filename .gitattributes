@@ -1,0 +1,8 @@
+# Normalise text files; keep scanner inputs and shell scripts LF on every OS
+# (SecretSentinel also normalises line endings itself, see services/rules.py).
+* text=auto
+rules/** text eol=lf
+*.sh text eol=lf
+*.toml text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
