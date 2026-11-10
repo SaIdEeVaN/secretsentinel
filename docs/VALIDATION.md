@@ -75,14 +75,24 @@ Both surfaced only on GitHub-hosted runners, not in local runs:
    `test_crlf_checkout_has_same_digest_and_clean_config` and
    `test_scan_works_with_crlf_ruleset`.
 
-## Not established by these local checks
+## GitHub Actions on `main`
 
-- GitHub-hosted workflow results, fork-PR approval behaviour and required-check
-  merge blocking must be verified on GitHub after configuring a ruleset
+All workflows passed on GitHub-hosted runners for commit `ad9b7d7`:
+`SecretSentinel Security Scan` (dogfood scan, push event: full history),
+`Backend tests` (Ubuntu pytest with real Gitleaks, CI gate self-test, and the
+Windows job: `bootstrap_windows.ps1`, the full suite and a `run_scanner.ps1`
+demo scan returning the expected blocking result), `Frontend tests` (Vitest,
+build, Playwright desktop + mobile) and `Contracts tests` (Hardhat suite plus
+Python interop against a locally deployed `ScanRegistry`).
+
+## Not established by these checks
+
+- Fork-PR approval behaviour and required-check merge blocking must be
+  verified on GitHub after configuring a ruleset
   ([CI_SETUP.md](CI_SETUP.md)). A committed workflow alone does not enable
   branch protection.
-- Windows: `bootstrap_windows.ps1`, `run_scanner.ps1` and the test suite run in
-  the experimental `windows-latest` CI job; PowerShell was not available in this
-  container, so they were reviewed but not executed here.
+- Windows coverage comes from the `windows-latest` CI job (one green run so
+  far; it is still marked `continue-on-error` until it has a longer history).
+  Tests using the POSIX fake scanner are skipped there.
 - The blockchain extension was not deployed to Sepolia or validated against a
   live network.
