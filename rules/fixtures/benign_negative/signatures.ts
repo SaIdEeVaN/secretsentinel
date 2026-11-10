@@ -1,0 +1,4 @@
+// BENIGN FIXTURE: signatures and public keys are public by design.
+export const signature = "0x963261496ddce7ca63fc96cae95e07b95c367a20ac853055a2e536f0880ed6b04067e9f419f4b6bd3897277b7986409dd78dcc1b0fdd5086471641a8de2664361b";
+export const uncompressedPublicKey = "0x0442582a0c40cf67061816a3a105f9a0d480b392a685d77b92973a266021fee9d98900c26cde8444d889bc1f0fe602c1ee2d86cde47a69b6da20d03db5b49d02f0";
+export const selector = "0xa9059cbb";

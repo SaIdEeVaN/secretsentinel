@@ -1,0 +1,4 @@
+// SYNTHETIC FIXTURE - NOT A REAL CREDENTIAL. Generated at test time from a public label.
+const HDWalletProvider = require("@truffle/hdwallet-provider");
+const mnemonic = '{{SYNTH:mnemonic24:mn-truffle}}';
+module.exports = { networks: { sepolia: { provider: () => new HDWalletProvider(mnemonic, "https://rpc.sepolia.org") } } };

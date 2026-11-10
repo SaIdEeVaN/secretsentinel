@@ -1,0 +1,364 @@
+# SecretSentinel severity, confidence and remediation mapping.
+#
+# Severity is a DETECTOR RISK ESTIMATE, not proof that a credential is live,
+# valid or exploited. Confidence describes how likely the match is a real
+# secret rather than sample data.
+#
+# Resolution order for a Gitleaks rule ID:
+#   1. exact entry under `rules`
+#   2. first matching glob under `patterns` (fnmatch syntax, top to bottom)
+#   3. `defaults`
+#
+# Path-based heuristics may LOWER CONFIDENCE only. They never lower severity,
+# because a real secret committed under tests/ is still a real secret.
+#
+# Every remediation_key must exist in secretsentinel/services/remediation.py.
+
+ruleset_version: "1.0.0"
+
+severities: [critical, high, medium, low]
+confidences: [high, medium, low]
+
+defaults:
+  severity: high
+  confidence: medium
+  family: service-credential
+  remediation_key: ROTATE_API_TOKEN
+
+rules:
+  # ---- Web3: signing keys -------------------------------------------------
+  web3-evm-private-key-assignment:
+    title: Potential EVM signing secret
+    severity: critical
+    confidence: high
+    family: web3-signing-key
+    remediation_key: ROTATE_SIGNING_KEY
+    requirement: W3-01
+  web3-evm-private-key-in-code:
+    title: Hardcoded EVM private key in wallet/account constructor
+    severity: critical
+    confidence: high
+    family: web3-signing-key
+    remediation_key: ROTATE_SIGNING_KEY
+    requirement: W3-04
+  web3-hardhat-accounts-private-key:
+    title: Hardcoded private key in network accounts array
+    severity: critical
+    confidence: high
+    family: web3-signing-key
+    remediation_key: ROTATE_SIGNING_KEY
+    requirement: W3-04
+  web3-cli-private-key-flag:
+    title: Private key passed on a deployment command line
+    severity: critical
+    confidence: high
+    family: web3-signing-key
+    remediation_key: ROTATE_SIGNING_KEY
+    requirement: W3-06
+  web3-bip32-extended-private-key:
+    title: BIP-32 extended private key (HD wallet root)
+    severity: critical
+    confidence: high
+    family: web3-signing-key
+    remediation_key: ROTATE_SIGNING_KEY
+    requirement: W3-04
+  web3-solana-private-key-base58:
+    title: Potential Solana private key (base58)
+    severity: critical
+    confidence: medium
+    family: web3-signing-key
+    remediation_key: ROTATE_SIGNING_KEY
+    requirement: W3-04
+  web3-solana-keypair-array:
+    title: Potential Solana keypair byte array
+    severity: critical
+    confidence: medium
+    family: web3-signing-key
+    remediation_key: ROTATE_SIGNING_KEY
+    requirement: W3-04
+  web3-solana-keypair-file:
+    title: Solana CLI keypair file
+    severity: critical
+    confidence: high
+    family: web3-signing-key
+    remediation_key: ROTATE_SIGNING_KEY
+    requirement: W3-05
+
+  # ---- Web3: mnemonics ----------------------------------------------------
+  web3-mnemonic-assignment:
+    title: Potential wallet seed / mnemonic phrase
+    severity: critical
+    confidence: medium
+    family: web3-mnemonic
+    remediation_key: MIGRATE_WALLET_SEED
+    requirement: W3-02
+  web3-cli-mnemonic-flag:
+    title: Mnemonic passed on a deployment command line
+    severity: critical
+    confidence: high
+    family: web3-mnemonic
+    remediation_key: MIGRATE_WALLET_SEED
+    requirement: W3-06
+  web3-known-dev-mnemonic:
+    title: Publicly known development mnemonic (Hardhat/Anvil)
+    severity: low
+    confidence: high
+    family: web3-dev-only
+    remediation_key: DEV_KEY_NOTICE
+    requirement: W3-02
+
+  # ---- Web3: RPC / provider credentials -----------------------------------
+  web3-provider-api-key:
+    title: Web3 provider or block-explorer API credential
+    severity: high
+    confidence: medium
+    family: web3-rpc-credential
+    remediation_key: ROTATE_RPC_KEY
+    requirement: W3-03
+  web3-infura-rpc-url:
+    title: Infura RPC URL with embedded project key
+    severity: medium
+    confidence: medium
+    family: web3-rpc-credential
+    remediation_key: ROTATE_RPC_KEY
+    requirement: W3-03
+  web3-alchemy-rpc-url:
+    title: Alchemy RPC URL with embedded API key
+    severity: medium
+    confidence: medium
+    family: web3-rpc-credential
+    remediation_key: ROTATE_RPC_KEY
+    requirement: W3-03
+  web3-quicknode-rpc-url:
+    title: QuickNode RPC URL with embedded access token
+    severity: medium
+    confidence: medium
+    family: web3-rpc-credential
+    remediation_key: ROTATE_RPC_KEY
+    requirement: W3-03
+  web3-rpc-url-credential-param:
+    title: RPC URL with credential in query string
+    severity: medium
+    confidence: low
+    family: web3-rpc-credential
+    remediation_key: ROTATE_RPC_KEY
+    requirement: W3-03
+
+  # ---- Web3: keystores ----------------------------------------------------
+  web3-keystore-file:
+    title: Encrypted Ethereum keystore file
+    severity: medium
+    confidence: high
+    family: web3-keystore
+    remediation_key: PROTECT_KEYSTORE
+    requirement: W3-05
+  web3-keystore-ciphertext:
+    title: Encrypted keystore (V3 JSON) content
+    severity: medium
+    confidence: medium
+    family: web3-keystore
+    remediation_key: PROTECT_KEYSTORE
+    requirement: W3-05
+
+  # ---- SecretSentinel policy checks (not Gitleaks rules) -----------------
+  secretsentinel-gitleaksignore-present:
+    title: Repository .gitleaksignore can hide findings from the gate
+    severity: high
+    confidence: high
+    family: policy-bypass
+    remediation_key: REVIEW_IGNORE_FILE
+
+  # ---- Selected Gitleaks default rules ------------------------------------
+  generic-api-key:
+    title: Generic API key or secret
+    severity: medium
+    confidence: low
+    family: generic-secret
+    remediation_key: REVIEW_GENERIC_SECRET
+  private-key:
+    title: Private key block (PEM)
+    severity: high
+    confidence: high
+    family: private-key-file
+    remediation_key: ROTATE_PRIVATE_KEY_FILE
+  pkcs12-file:
+    title: PKCS#12 certificate/key bundle
+    severity: high
+    confidence: high
+    family: private-key-file
+    remediation_key: ROTATE_PRIVATE_KEY_FILE
+  age-secret-key:
+    title: age encryption secret key
+    severity: high
+    confidence: high
+    family: private-key-file
+    remediation_key: ROTATE_PRIVATE_KEY_FILE
+  jwt:
+    title: JSON Web Token
+    severity: medium
+    confidence: medium
+    family: session-token
+    remediation_key: ROTATE_API_TOKEN
+  jwt-base64:
+    title: Base64-encoded JSON Web Token
+    severity: medium
+    confidence: medium
+    family: session-token
+    remediation_key: ROTATE_API_TOKEN
+  curl-auth-header:
+    title: Credential in curl Authorization header
+    severity: high
+    confidence: medium
+    family: service-credential
+    remediation_key: ROTATE_API_TOKEN
+  curl-auth-user:
+    title: Credential in curl --user argument
+    severity: high
+    confidence: medium
+    family: service-credential
+    remediation_key: ROTATE_API_TOKEN
+  kubernetes-secret-yaml:
+    title: Kubernetes Secret manifest with data
+    severity: high
+    confidence: medium
+    family: cloud-credential
+    remediation_key: ROTATE_CLOUD_CREDENTIAL
+
+patterns:
+  # Public / low-risk identifiers that Gitleaks still reports.
+  - match: "*-client-id"
+    severity: low
+    confidence: medium
+    family: public-identifier
+    remediation_key: REVIEW_PUBLIC_IDENTIFIER
+  - match: "*-pub-*"
+    severity: low
+    confidence: medium
+    family: public-identifier
+    remediation_key: REVIEW_PUBLIC_IDENTIFIER
+  - match: "*-public-key"
+    severity: low
+    confidence: medium
+    family: public-identifier
+    remediation_key: REVIEW_PUBLIC_IDENTIFIER
+  - match: "*-access-id"
+    severity: low
+    confidence: medium
+    family: public-identifier
+    remediation_key: REVIEW_PUBLIC_IDENTIFIER
+  # Centralised crypto exchanges: keys may allow trading or withdrawals.
+  - match: "coinbase-*"
+    severity: high
+    confidence: high
+    family: exchange-credential
+    remediation_key: ROTATE_EXCHANGE_KEY
+  - match: "kraken-*"
+    severity: high
+    confidence: high
+    family: exchange-credential
+    remediation_key: ROTATE_EXCHANGE_KEY
+  - match: "kucoin-*"
+    severity: high
+    confidence: high
+    family: exchange-credential
+    remediation_key: ROTATE_EXCHANGE_KEY
+  - match: "bittrex-*"
+    severity: high
+    confidence: high
+    family: exchange-credential
+    remediation_key: ROTATE_EXCHANGE_KEY
+  # Cloud providers.
+  - match: "aws-*"
+    severity: high
+    confidence: high
+    family: cloud-credential
+    remediation_key: ROTATE_CLOUD_CREDENTIAL
+  - match: "gcp-*"
+    severity: high
+    confidence: high
+    family: cloud-credential
+    remediation_key: ROTATE_CLOUD_CREDENTIAL
+  - match: "azure-*"
+    severity: high
+    confidence: high
+    family: cloud-credential
+    remediation_key: ROTATE_CLOUD_CREDENTIAL
+  - match: "alibaba-*"
+    severity: high
+    confidence: high
+    family: cloud-credential
+    remediation_key: ROTATE_CLOUD_CREDENTIAL
+  - match: "digitalocean-*"
+    severity: high
+    confidence: high
+    family: cloud-credential
+    remediation_key: ROTATE_CLOUD_CREDENTIAL
+  - match: "cloudflare-*"
+    severity: high
+    confidence: high
+    family: cloud-credential
+    remediation_key: ROTATE_CLOUD_CREDENTIAL
+  - match: "yandex-*"
+    severity: high
+    confidence: high
+    family: cloud-credential
+    remediation_key: ROTATE_CLOUD_CREDENTIAL
+  - match: "heroku-*"
+    severity: high
+    confidence: high
+    family: cloud-credential
+    remediation_key: ROTATE_CLOUD_CREDENTIAL
+  - match: "flyio-*"
+    severity: high
+    confidence: high
+    family: cloud-credential
+    remediation_key: ROTATE_CLOUD_CREDENTIAL
+  # Source hosting, package registries, CI.
+  - match: "github-*"
+    severity: high
+    confidence: high
+    family: code-hosting-token
+    remediation_key: ROTATE_API_TOKEN
+  - match: "gitlab-*"
+    severity: high
+    confidence: high
+    family: code-hosting-token
+    remediation_key: ROTATE_API_TOKEN
+  - match: "bitbucket-*"
+    severity: high
+    confidence: high
+    family: code-hosting-token
+    remediation_key: ROTATE_API_TOKEN
+  - match: "npm-*"
+    severity: high
+    confidence: high
+    family: code-hosting-token
+    remediation_key: ROTATE_API_TOKEN
+  - match: "pypi-*"
+    severity: high
+    confidence: high
+    family: code-hosting-token
+    remediation_key: ROTATE_API_TOKEN
+  - match: "*-webhook*"
+    severity: medium
+    confidence: high
+    family: service-credential
+    remediation_key: ROTATE_API_TOKEN
+
+# Paths that usually hold examples or tests. Matching findings get their
+# CONFIDENCE lowered by one step. Severity (and therefore blocking) is
+# unchanged.
+low_confidence_paths:
+  - "**/test/**"
+  - "**/tests/**"
+  - "**/__tests__/**"
+  - "**/spec/**"
+  - "**/fixtures/**"
+  - "**/testdata/**"
+  - "**/examples/**"
+  - "**/example/**"
+  - "**/docs/**"
+  - "**/mocks/**"
+  - "**/*.example"
+  - "**/*.sample"
+  - "**/*.md"

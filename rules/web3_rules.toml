@@ -1,0 +1,229 @@
+# SecretSentinel Web3 ruleset
+# ---------------------------------------------------------------------------
+# This file EXTENDS the Gitleaks default configuration (it does not replace it)
+# and adds a deliberately small set of context-driven Web3 rules.
+#
+# Design principles (see docs/PRD.md section 7.2):
+#   * Prefer identifier context (PRIVATE_KEY=, MNEMONIC=, ...) over isolated
+#     random-looking values. A bare 64-hex string is often a hash, not a key.
+#   * Addresses, transaction hashes, public keys and contract addresses are
+#     NOT treated as secrets.
+#   * All regexes target Gitleaks' Go RE2 engine: no look-around, no
+#     back-references. Scoped flags such as (?i:...) are used so character
+#     classes like base58 stay case-sensitive.
+#   * Rule IDs must not contain the word "generic": Gitleaks drops
+#     generic-* findings when a specific rule matches the same secret.
+#   * Severity, confidence, remediation and titles live in
+#     severity_mapping.yaml, not here.
+#
+# Never add real credentials to this file or to its fixtures.
+# ---------------------------------------------------------------------------
+
+title = "SecretSentinel Web3 ruleset"
+minVersion = "v8.25.0"
+
+[extend]
+useDefault = true
+
+# ---------------------------------------------------------------------------
+# W3-01  EVM private key assignment
+# ---------------------------------------------------------------------------
+[[rules]]
+id = "web3-evm-private-key-assignment"
+description = "Potential EVM private key assigned to a key-related identifier"
+regex = '''(?i:private[_.-]?key|priv[_.-]?key|signer[_.-]?(?:private[_.-]?)?key|signing[_.-]?key|deployer[_.-]?(?:private[_.-]?)?key|wallet[_.-]?(?:private[_.-]?)?key|eth(?:ereum)?[_.-]?(?:private[_.-]?)?key|account[_.-]?private[_.-]?key|\bpk)[A-Za-z0-9_.-]{0,30}["']?[ \t]*(?:\|\||\?\?|:=|\?=|=>|[:=])[ \t]*["'`]?(?:0x)?([a-fA-F0-9]{64})\b'''
+secretGroup = 1
+entropy = 3.0
+keywords = ["private", "priv", "signer", "signing", "deployer", "wallet", "eth", "account", "pk"]
+tags = ["web3", "evm", "private-key", "W3-01"]
+[[rules.allowlists]]
+description = "Identifiers that name a hash/digest of a key rather than the key itself"
+regexTarget = "match"
+regexes = [
+    '''(?i)(?:key|pk)[A-Za-z0-9_.-]*(?:hash|digest|checksum|commitment|salt|nonce|topic|selector|slot|fingerprint)''',
+]
+
+# ---------------------------------------------------------------------------
+# W3-04  Hardcoded wallet / signing secrets passed straight into SDK calls
+# ---------------------------------------------------------------------------
+[[rules]]
+id = "web3-evm-private-key-in-code"
+description = "Hex private key passed directly to a wallet or account constructor"
+regex = '''(?i:new[ \t]+(?:ethers\.)?wallet|wallet\.from_?(?:private_?)?key|privatekeytoaccount|from_?private_?key|from_?key|accounts\.add|wallet\.add|signingkey|signing_?key\.from_?string)[ \t]*\([ \t\r\n]*["'`](?:0x)?([a-fA-F0-9]{64})["'`]'''
+secretGroup = 1
+entropy = 3.0
+keywords = ["wallet", "privatekeytoaccount", "fromprivatekey", "from_private_key", "fromkey", "from_key", "accounts.add", "signingkey", "signing_key"]
+tags = ["web3", "evm", "private-key", "W3-04"]
+
+[[rules]]
+id = "web3-hardhat-accounts-private-key"
+description = "Hex private key hardcoded in a Hardhat/Truffle network accounts array"
+regex = '''(?i:accounts)[ \t]*[:=][ \t]*\[[ \t\r\n]*["'`](?:0x)?([a-fA-F0-9]{64})["'`]'''
+secretGroup = 1
+entropy = 3.0
+keywords = ["accounts"]
+tags = ["web3", "evm", "private-key", "W3-04"]
+
+# ---------------------------------------------------------------------------
+# W3-06  Deployment scripts (Foundry cast/forge, scripts) passing secrets on
+#        the command line
+# ---------------------------------------------------------------------------
+[[rules]]
+id = "web3-cli-private-key-flag"
+description = "Hex private key passed to a CLI via --private-key"
+regex = '''--private-key(?:[ \t]+|=)["']?(?:0x)?([a-fA-F0-9]{64})\b'''
+secretGroup = 1
+entropy = 3.0
+keywords = ["--private-key"]
+tags = ["web3", "evm", "private-key", "deployment", "W3-06"]
+
+[[rules]]
+id = "web3-cli-mnemonic-flag"
+description = "Mnemonic phrase passed to a CLI via --mnemonic"
+regex = '''--mnemonic(?:-phrase)?(?:[ \t]+|=)["']((?:[a-z]{3,8}[ \t]+){11}[a-z]{3,8}(?:(?:[ \t]+[a-z]{3,8}){3}){0,4})["']'''
+secretGroup = 1
+keywords = ["--mnemonic"]
+tags = ["web3", "mnemonic", "deployment", "W3-06"]
+[[rules.allowlists]]
+description = "Publicly known Hardhat/Anvil development mnemonic (reported by web3-known-dev-mnemonic)"
+regexes = ['''^test(?:[ \t]+test){10}[ \t]+junk$''']
+
+# ---------------------------------------------------------------------------
+# W3-02  Seed / mnemonic phrase assigned to a seed-related identifier
+# ---------------------------------------------------------------------------
+[[rules]]
+id = "web3-mnemonic-assignment"
+description = "Potential wallet seed / mnemonic phrase (12-24 words) assigned to a seed-related identifier"
+regex = '''(?i:mnemonic|seed[_.-]?phrase|seed[_.-]?words|recovery[_.-]?phrase|secret[_.-]?(?:recovery[_.-]?)?phrase|wallet[_.-]?seed|\bseed)[A-Za-z0-9_.-]{0,30}["']?[ \t]*(?:\|\||\?\?|:=|\?=|=>|[:=])[ \t]*["'`]?((?:[a-z]{3,8}[ \t]+){11}[a-z]{3,8}(?:(?:[ \t]+[a-z]{3,8}){3}){0,4})[ \t]*(?:["'`]|\r?\n|$)'''
+secretGroup = 1
+keywords = ["mnemonic", "seed", "recovery", "phrase"]
+tags = ["web3", "mnemonic", "W3-02"]
+[[rules.allowlists]]
+description = "Publicly known Hardhat/Anvil development mnemonic (reported by web3-known-dev-mnemonic)"
+regexes = ['''^test(?:[ \t]+test){10}[ \t]+junk$''']
+
+[[rules]]
+id = "web3-known-dev-mnemonic"
+description = "Publicly known Hardhat/Anvil development mnemonic"
+regex = '''(?i:mnemonic)[A-Za-z0-9_.-]{0,30}["']?[ \t]*(?:\|\||\?\?|:=|\?=|=>|[:=]|[ \t])[ \t]*["'`]?(test(?:[ \t]+test){10}[ \t]+junk)'''
+secretGroup = 1
+keywords = ["mnemonic"]
+tags = ["web3", "mnemonic", "dev-only", "W3-02"]
+
+# ---------------------------------------------------------------------------
+# Extended (HD wallet) private keys and non-EVM signing keys
+# ---------------------------------------------------------------------------
+[[rules]]
+id = "web3-bip32-extended-private-key"
+description = "BIP-32 extended private key (xprv/tprv/yprv/zprv)"
+regex = '''\b([xtyzuv]prv[1-9A-HJ-NP-Za-km-z]{107,108})\b'''
+secretGroup = 1
+entropy = 4.0
+keywords = ["prv"]
+tags = ["web3", "hd-wallet", "private-key", "W3-04"]
+
+[[rules]]
+id = "web3-solana-private-key-base58"
+description = "Potential base58-encoded Solana private key assigned to a key-related identifier"
+regex = '''(?i:private[_.-]?key|secret[_.-]?key|solana[_.-]?(?:private[_.-]?)?key|wallet[_.-]?(?:private[_.-]?)?key|signer[_.-]?key|phantom[_.-]?key)[A-Za-z0-9_.-]{0,30}["']?[ \t]*(?:\|\||\?\?|:=|\?=|=>|[:=])[ \t]*["'`]?([1-9A-HJ-NP-Za-km-z]{86,90})(?:[^1-9A-HJ-NP-Za-km-z]|$)'''
+secretGroup = 1
+entropy = 4.0
+keywords = ["private", "secret", "solana", "wallet", "signer", "phantom"]
+tags = ["web3", "solana", "private-key", "W3-04"]
+
+[[rules]]
+id = "web3-solana-keypair-array"
+description = "Potential Solana keypair (64-byte secret key array) next to a key-related identifier"
+regex = '''(?i:secret_?key|from_?secret_?key|keypair|private_?key|wallet)[^\[\r\n]{0,40}\[[ \t\r\n]*((?:\d{1,3}[ \t\r\n]*,[ \t\r\n]*){63}\d{1,3})[ \t\r\n]*\]'''
+secretGroup = 1
+keywords = ["secretkey", "secret_key", "keypair", "privatekey", "private_key", "wallet"]
+tags = ["web3", "solana", "private-key", "W3-04"]
+
+[[rules]]
+id = "web3-solana-keypair-file"
+description = "Solana CLI keypair file (JSON array of 64 secret key bytes)"
+path = '''(?i)(?:^|[/\\])(?:id|[a-z0-9_-]*(?:keypair|wallet|deployer|authority|signer)[a-z0-9_-]*)\.json$'''
+regex = '''\A[ \t\r\n]*\[((?:[ \t\r\n]*\d{1,3}[ \t\r\n]*,){63}[ \t\r\n]*\d{1,3})[ \t\r\n]*\][ \t\r\n]*\z'''
+secretGroup = 1
+tags = ["web3", "solana", "keystore", "W3-05"]
+
+# ---------------------------------------------------------------------------
+# W3-03  Web3 RPC / provider credentials
+# Public endpoint URLs are NOT secrets by themselves; these rules require a
+# provider-specific key segment or a credential-named field.
+# ---------------------------------------------------------------------------
+[[rules]]
+id = "web3-provider-api-key"
+description = "Web3 provider / explorer API key or secret assigned to a provider-named identifier"
+regex = '''(?i:infura|alchemy|etherscan|bscscan|polygonscan|arbiscan|basescan|snowtrace|ftmscan|moralis|quicknode|ankr|tenderly|blocknative|covalent|chainstack|getblock|pinata|thirdweb|defender|relayer|coinmarketcap)[A-Za-z0-9_.-]{0,20}(?i:key|secret|token|jwt)[A-Za-z0-9_.-]{0,10}["']?[ \t]*(?:\|\||\?\?|:=|\?=|=>|[:=])[ \t]*["'`]?([A-Za-z0-9_-]{20,128})(?:[^A-Za-z0-9_-]|$)'''
+secretGroup = 1
+entropy = 3.2
+keywords = ["infura", "alchemy", "etherscan", "bscscan", "polygonscan", "arbiscan", "basescan", "snowtrace", "ftmscan", "moralis", "quicknode", "ankr", "tenderly", "blocknative", "covalent", "chainstack", "getblock", "pinata", "thirdweb", "defender", "relayer", "coinmarketcap"]
+tags = ["web3", "rpc", "api-key", "W3-03"]
+
+[[rules]]
+id = "web3-infura-rpc-url"
+description = "Infura RPC URL containing a project key"
+regex = '''(?i:infura\.io)/(?:v3|ws/v3)/([a-fA-F0-9]{32})\b'''
+secretGroup = 1
+keywords = ["infura.io"]
+tags = ["web3", "rpc", "url", "W3-03"]
+
+[[rules]]
+id = "web3-alchemy-rpc-url"
+description = "Alchemy RPC URL containing an API key"
+regex = '''(?i:alchemy(?:api)?\.(?:io|com))/(?:v2|v3|nft/v[23])/([A-Za-z0-9_-]{32})(?:[^A-Za-z0-9_-]|$)'''
+secretGroup = 1
+entropy = 3.0
+keywords = ["alchemy"]
+tags = ["web3", "rpc", "url", "W3-03"]
+
+[[rules]]
+id = "web3-quicknode-rpc-url"
+description = "QuickNode RPC URL containing an access token"
+regex = '''(?i:\.quiknode\.pro)/([a-fA-F0-9]{40})\b'''
+secretGroup = 1
+keywords = ["quiknode.pro"]
+tags = ["web3", "rpc", "url", "W3-03"]
+
+[[rules]]
+id = "web3-rpc-url-credential-param"
+description = "RPC/node URL carrying a credential in its query string"
+regex = '''(?i)\bhttps?://[^\s"'<>?]{0,200}(?:rpc|node|infura|alchemy|quiknode|ankr|chainstack|getblock|drpc|blastapi|mainnet|sepolia|holesky|polygon|arbitrum|optimism|bsc|avax|solana)[^\s"'<>?]{0,200}\?(?:[^\s"'<>]{0,200}&)?(?:api[_-]?key|apikey|key|token|access[_-]?token|auth|secret)=([A-Za-z0-9_-]{16,128})'''
+secretGroup = 1
+entropy = 3.0
+keywords = ["key=", "token=", "auth=", "secret="]
+tags = ["web3", "rpc", "url", "W3-03"]
+
+# ---------------------------------------------------------------------------
+# W3-05  Keystore / wallet backup files
+# Encrypted keystores are not plaintext secrets, but they are brute-forceable
+# offline and should not live in source control.
+# ---------------------------------------------------------------------------
+[[rules]]
+id = "web3-keystore-file"
+description = "Ethereum (geth/clef) keystore file committed to the repository"
+path = '''(?:^|[/\\])UTC--\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:\.\d+)?Z--[a-fA-F0-9]{40}(?:\.json)?$'''
+tags = ["web3", "keystore", "W3-05"]
+
+[[rules]]
+id = "web3-keystore-ciphertext"
+description = "Encrypted Web3 keystore (V3 JSON) content"
+regex = '''(?i:"ciphertext")[ \t]*:[ \t]*"([a-fA-F0-9]{64})"'''
+secretGroup = 1
+keywords = ["ciphertext"]
+tags = ["web3", "keystore", "W3-05"]
+
+# ---------------------------------------------------------------------------
+# False-positive controls layered onto Gitleaks DEFAULT rules.
+# Declaring an existing rule ID merges these allowlists into the default rule
+# (Gitleaks "extend" semantics) without replacing its regex.
+# ---------------------------------------------------------------------------
+[[rules]]
+id = "generic-api-key"
+[[rules.allowlists]]
+description = "SecretSentinel: identifiers that name a hash/digest of a key rather than the key"
+regexTarget = "match"
+regexes = [
+    '''(?i)(?:key|pk|secret|token)[A-Za-z0-9_.-]*(?:hash|digest|checksum|fingerprint)[A-Za-z0-9_]*["']?[ \t]*[:=]''',
+]

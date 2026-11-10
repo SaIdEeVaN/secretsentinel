@@ -1,0 +1,2 @@
+# BENIGN FIXTURE: an extended PUBLIC key (xpub) is not a secret.
+xpub6CUGRUonZSQ4TWtTMmzXdrXDtypWKiKrhko4egpiMZbpiaQL2jkwSB1icqYh2cfDfVxdx4df189oLKnC5fSwqPfgyP3hooxujYzAu3fDVmz

@@ -1,0 +1,53 @@
+# Versioned fixture manifest used by the detection-quality tests
+# (backend/tests/test_rules.py) and benchmark script.
+#
+# Paths are relative to the materialised fixture root:
+#   synthetic_positive/...  rendered from *.tmpl templates at test time
+#   benign_negative/...     committed verbatim (benign by construction)
+#
+# Acceptance targets (PRD 4.3): detection >= 90%, false positives <= 10%.
+
+version: 1
+
+positives:
+  - {path: synthetic_positive/evm/env_private_key.env, rule: web3-evm-private-key-assignment, tests: [T06]}
+  - {path: synthetic_positive/evm/config.json, rule: web3-evm-private-key-assignment, tests: [T06]}
+  - {path: synthetic_positive/evm/settings.yaml, rule: web3-evm-private-key-assignment, tests: [T06]}
+  - {path: synthetic_positive/evm/hardhat.config.js, rule: web3-hardhat-accounts-private-key}
+  - {path: synthetic_positive/evm/wallet.ts, rule: web3-evm-private-key-in-code}
+  - {path: synthetic_positive/evm/viem_account.ts, rule: web3-evm-private-key-in-code}
+  - {path: synthetic_positive/evm/web3py_signer.py, rule: web3-evm-private-key-in-code}
+  - {path: synthetic_positive/evm/deploy.sh, rule: web3-cli-private-key-flag}
+  - {path: synthetic_positive/mnemonic/wallet.env, rule: web3-mnemonic-assignment}
+  - {path: synthetic_positive/mnemonic/truffle-config.js, rule: web3-mnemonic-assignment}
+  - {path: synthetic_positive/mnemonic/unquoted.env, rule: web3-mnemonic-assignment}
+  - {path: synthetic_positive/mnemonic/cast_send.sh, rule: web3-cli-mnemonic-flag}
+  - {path: synthetic_positive/mnemonic/hardhat_dev.config.js, rule: web3-known-dev-mnemonic}
+  - {path: synthetic_positive/hd/backup.txt, rule: web3-bip32-extended-private-key}
+  - {path: synthetic_positive/solana/payer.ts, rule: web3-solana-keypair-array}
+  - {path: synthetic_positive/solana/id.json, rule: web3-solana-keypair-file}
+  - {path: synthetic_positive/solana/solana.env, rule: web3-solana-private-key-base58}
+  - {path: synthetic_positive/rpc/infura.js, rule: web3-infura-rpc-url}
+  - {path: synthetic_positive/rpc/alchemy.env, rule: web3-alchemy-rpc-url}
+  - {path: synthetic_positive/rpc/quicknode.ts, rule: web3-quicknode-rpc-url}
+  - {path: synthetic_positive/rpc/etherscan.env, rule: web3-provider-api-key}
+  - {path: synthetic_positive/rpc/node_query.py, rule: web3-rpc-url-credential-param}
+  - {path: "synthetic_positive/keystore/UTC--2026-01-01T00-00-00.000000000Z--5ece1a5e00000000000000000000000000000c0d", rule: web3-keystore-file}
+  - {path: synthetic_positive/keystore/backup-keystore.json, rule: web3-keystore-ciphertext}
+  - {path: synthetic_positive/services/aws.env, rule: aws-access-token, tests: [T02]}
+  - {path: synthetic_positive/services/github_client.py, rule: github-pat, tests: [T02]}
+  - {path: synthetic_positive/services/server.pem, rule: private-key}
+  - {path: synthetic_positive/services/app_settings.yaml, rule: generic-api-key}
+
+negatives:
+  - {path: benign_negative/tx_hashes.js, tests: [T05]}
+  - {path: benign_negative/Registry.sol, tests: [T05]}
+  - {path: benign_negative/key_hashes.py, tests: [T05]}
+  - {path: benign_negative/merkle.json, tests: [T05]}
+  - {path: benign_negative/signatures.ts}
+  - {path: benign_negative/sentences.md, tests: [T07]}
+  - {path: benign_negative/placeholders.env}
+  - {path: benign_negative/env_reference.ts}
+  - {path: benign_negative/public_rpc.js}
+  - {path: benign_negative/zero_key.env}
+  - {path: benign_negative/xpub.txt}

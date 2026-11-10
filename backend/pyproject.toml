@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "secretsentinel"
+version = "1.0.0"
+description = "Web3-focused secret leakage detection and DevSecOps platform built on Gitleaks"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [{ name = "SecretSentinel contributors" }]
+keywords = ["security", "secrets", "gitleaks", "devsecops", "web3"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+  "Topic :: Security",
+]
+# Scanner core needs only PyYAML. The API/dashboard and local history use the rest.
+dependencies = [
+  "PyYAML>=6.0.1,<7",
+  "SQLAlchemy>=2.0.30,<3",
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.30,<1",
+]
+
+[project.optional-dependencies]
+blockchain = ["eth-account>=0.13,<1"]
+dev = ["pytest>=8", "httpx>=0.27", "eth-account>=0.13,<1"]
+
+[project.scripts]
+secretsentinel = "secretsentinel.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["secretsentinel"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]
+markers = [
+  "gitleaks: requires a real Gitleaks executable (GITLEAKS_PATH or PATH)",
+]

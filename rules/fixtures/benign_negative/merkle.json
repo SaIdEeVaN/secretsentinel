@@ -1,0 +1,5 @@
+{
+  "_comment": "BENIGN FIXTURE: Merkle roots and proofs are public.",
+  "merkleRoot": "0x8f009c75be62ad4020b60efbdc5b71b228f95d540edd270ba2476e74079a2038",
+  "proof": ["0xc6ec10e182205596aab4cba8aca5512fef8ad74c80431fabbf7f393250ab5d9f", "0xb15b1a2d463ff67e13f0a83eeb2fe11c60f1c821ddfb8427e1da1e81d5d0e9e9"]
+}

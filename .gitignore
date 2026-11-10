@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+contracts/artifacts/
+contracts/cache/
+
+# Local data, never commit
+.env
+.env.*
+!.env.example
+data/
+*.db
+*.db-wal
+*.db-shm
+sample-repos/
+tools/
+safe-report*.json
+*.sarif
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
