@@ -22,7 +22,7 @@ router = APIRouter(tags=["metrics"])
 
 
 @router.get("/metrics/overview", response_model=MetricsOverview)
-def overview(session: Session = Depends(get_db)):
+def overview(session: Session = Depends(get_db, scope="function")):
     latest_ids = latest_completed_scan_ids(session) or [""]
     current = select(Finding).where(Finding.scan_id.in_(latest_ids))
     open_q = current.where(Finding.status.in_(("open", "acknowledged")))
@@ -127,7 +127,7 @@ def system_status(settings: Settings = Depends(get_settings)):
 def audit_events(
     entity_id: str | None = Query(None, max_length=64),
     limit: int = Query(100, ge=1, le=500),
-    session: Session = Depends(get_db),
+    session: Session = Depends(get_db, scope="function"),
 ):
     q = select(AuditEvent).order_by(AuditEvent.occurred_at.desc()).limit(limit)
     if entity_id:

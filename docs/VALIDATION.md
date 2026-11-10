@@ -8,10 +8,10 @@ deployments or Sepolia calls were used.
 
 | Check | Observed result |
 |---|---|
-| `cd backend && python -m pytest -q` (real Gitleaks) | 203 passed, 3 skipped (the `chain` interop tests, run separately below) |
+| `cd backend && python -m pytest -q` (real Gitleaks) | 204 passed, 3 skipped (the `chain` interop tests, run separately below) |
 | `pytest -m chain tests/test_chain_interop.py` against a local Hardhat node | 3 passed |
 | `cd frontend && npm test` | 19 passed across 3 files |
-| `cd frontend && npm run test:e2e` | Production build passed; 6 browser tests passed (desktop + 390 px phone) |
+| `cd frontend && npm run test:e2e` | Production build passed; 6 browser tests passed (desktop + 390 px phone); 30/30 with `--repeat-each 5` |
 | `cd contracts && npx hardhat test` | 8 passing |
 | `bash scripts/ci_gate_selftest.sh` in a PyYAML-only environment | All 12 gate checks passed (clean, fixtures in 4 formats, clean/leaking PR, bad policy, bad ref, missing scanner, no canaries, annotations) |
 | `python scripts/check_no_raw_secrets.py --self-test` | Passed, 33 canaries loaded |
@@ -53,6 +53,16 @@ performance.
 - Optional attestations: canonicalisation, signing, tamper/untrusted-signer/
   wrong-chain rejection, and registration/verification against the deployed
   `ScanRegistry` on a local chain.
+
+## Defect found during the merge
+
+The browser suite failed on a GitHub runner (but not locally) for the Codex
+branch: a client reading immediately after a write could see stale data. Root
+cause: FastAPI runs a request-scoped `yield` dependency's teardown - where the
+SQLite session commits - only after the response has been sent. All routes now
+use `Depends(get_db, scope="function")` (FastAPI >= 0.121), which commits
+before responding, and `test_db_sessions_commit_before_the_response_is_sent`
+guards every route (it flags 6 routes on the pre-fix code).
 
 ## Not established by these local checks
 

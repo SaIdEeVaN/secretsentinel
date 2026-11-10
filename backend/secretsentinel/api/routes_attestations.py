@@ -63,7 +63,7 @@ def verify_attestation(body: AttestationVerifyRequest, settings: Settings = Depe
 
 
 @router.get("/attestations/{scan_id}", response_model=AttestationOut)
-def get_attestation(scan_id: str, session: Session = Depends(get_db), _s: Settings = Depends(require_blockchain)):
+def get_attestation(scan_id: str, session: Session = Depends(get_db, scope="function"), _s: Settings = Depends(require_blockchain)):
     a = session.scalar(select(Attestation).where(Attestation.scan_id == scan_id))
     if a is None:
         raise SecretSentinelError(ErrorCode.NOT_FOUND)
@@ -71,7 +71,7 @@ def get_attestation(scan_id: str, session: Session = Depends(get_db), _s: Settin
 
 
 @router.post("/attestations/{scan_id}", response_model=AttestationOut, status_code=status.HTTP_201_CREATED)
-def create_attestation(scan_id: str, session: Session = Depends(get_db), settings: Settings = Depends(require_blockchain)):
+def create_attestation(scan_id: str, session: Session = Depends(get_db, scope="function"), settings: Settings = Depends(require_blockchain)):
     scan = get_or_404(session, Scan, scan_id)
     if session.scalar(select(Attestation).where(Attestation.scan_id == scan_id)) is not None:
         raise SecretSentinelError(ErrorCode.INVALID_STATE, "Scan already attested.")

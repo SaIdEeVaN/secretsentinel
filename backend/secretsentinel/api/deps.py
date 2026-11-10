@@ -20,6 +20,13 @@ from ..services.jobs import ScanJobManager
 
 
 def get_db() -> Iterator[Session]:
+    """Per-request session. Routes MUST use ``Depends(get_db, scope="function")``.
+
+    With FastAPI's default (request) scope, the code after ``yield`` - our
+    commit - runs only AFTER the response has been sent, so a client that reads
+    immediately after a write can observe stale data. Function scope commits
+    before the response leaves the server.
+    """
     session = get_session_factory()()
     try:
         yield session

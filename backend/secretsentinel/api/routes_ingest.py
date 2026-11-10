@@ -41,7 +41,7 @@ def require_ingest_token(request: Request, settings: Settings = Depends(get_sett
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_ingest_token)],
 )
-def ingest(body: IngestReport, session: Session = Depends(get_db)):
+def ingest(body: IngestReport, session: Session = Depends(get_db, scope="function")):
     name = safe_text(body.repository_name or body.scan.target or "ci-repository", 200)
     key = f"ci:{name}"
     repo = session.query(Repository).filter(Repository.canonical_local_path == key).one_or_none()

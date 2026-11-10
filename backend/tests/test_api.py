@@ -324,3 +324,31 @@ def test_ingest_requires_token_and_strict_schema(make_client):
         assert r.status_code == 201
         scan = c.get(f"/api/v1/scans/{r.json()['scan_id']}").json()
         assert scan["mode"] == "ci" and scan["source"] == "ingest" and scan["blocking_findings"] == 1
+
+
+def test_db_sessions_commit_before_the_response_is_sent(client):
+    """Regression: request-scoped yield deps commit after the response is sent,
+    so a browser reading right after a write saw stale data (found by the E2E
+    suite on GitHub runners). TestClient cannot observe that race, so assert
+    the dependency scope structurally for every route."""
+    from fastapi.routing import APIRoute
+
+    from secretsentinel.api import (
+        routes_attestations, routes_findings, routes_ingest, routes_metrics, routes_repositories, routes_scans,
+    )
+    from secretsentinel.api.deps import get_db
+
+    def walk(dependant):
+        for dep in dependant.dependencies:
+            yield dep
+            yield from walk(dep)
+
+    checked = 0
+    modules = (routes_attestations, routes_findings, routes_ingest, routes_metrics, routes_repositories, routes_scans)
+    for route in (r for m in modules for r in m.router.routes):
+        if isinstance(route, APIRoute):
+            for dep in walk(route.dependant):
+                if dep.call is get_db:
+                    assert dep.scope == "function", f"{route.path} uses a request-scoped DB session"
+                    checked += 1
+    assert checked >= 15

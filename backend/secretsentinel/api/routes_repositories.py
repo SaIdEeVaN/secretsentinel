@@ -18,14 +18,14 @@ router = APIRouter(tags=["repositories"])
 
 
 @router.get("/repositories", response_model=list[RepositoryOut])
-def list_repositories(session: Session = Depends(get_db), settings: Settings = Depends(get_settings)):
+def list_repositories(session: Session = Depends(get_db, scope="function"), settings: Settings = Depends(get_settings)):
     repos = session.scalars(select(Repository).order_by(Repository.display_name)).all()
     return [repository_out(session, r, settings) for r in repos]
 
 
 @router.post("/repositories", response_model=RepositoryOut, status_code=status.HTTP_201_CREATED)
 def register_repository(
-    body: RepositoryCreate, session: Session = Depends(get_db), settings: Settings = Depends(get_settings)
+    body: RepositoryCreate, session: Session = Depends(get_db, scope="function"), settings: Settings = Depends(get_settings)
 ):
     target = canonicalize_existing_dir(body.path)
     ensure_within_allowed_roots(target, settings.scan_root_allowlist)
@@ -37,12 +37,12 @@ def register_repository(
 
 
 @router.get("/repositories/{repository_id}", response_model=RepositoryOut)
-def get_repository(repository_id: str, session: Session = Depends(get_db), settings: Settings = Depends(get_settings)):
+def get_repository(repository_id: str, session: Session = Depends(get_db, scope="function"), settings: Settings = Depends(get_settings)):
     return repository_out(session, get_or_404(session, Repository, repository_id), settings)
 
 
 @router.delete("/repositories/{repository_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_repository(repository_id: str, session: Session = Depends(get_db)):
+def delete_repository(repository_id: str, session: Session = Depends(get_db, scope="function")):
     repo = get_or_404(session, Repository, repository_id)
     active = session.scalar(
         select(Scan.id).where(Scan.repository_id == repo.id, Scan.status.in_(("queued", "running"))).limit(1)
@@ -55,7 +55,7 @@ def delete_repository(repository_id: str, session: Session = Depends(get_db)):
 
 
 @router.post("/demo", response_model=DemoCreated, status_code=status.HTTP_201_CREATED)
-def create_demo(session: Session = Depends(get_db), settings: Settings = Depends(get_settings)):
+def create_demo(session: Session = Depends(get_db, scope="function"), settings: Settings = Depends(get_settings)):
     """Create a synthetic demo repository inside the first allowed scan root."""
     from ..services.demo import create_demo_repo
 

@@ -27,7 +27,7 @@ router = APIRouter(tags=["scans"])
 @router.post("/scans", response_model=ScanCreated, status_code=status.HTTP_202_ACCEPTED)
 def start_scan(
     body: ScanCreate,
-    session: Session = Depends(get_db),
+    session: Session = Depends(get_db, scope="function"),
     settings: Settings = Depends(get_settings),
     jobs: ScanJobManager = Depends(get_jobs),
 ):
@@ -67,7 +67,7 @@ def list_scans(
     mode: str | None = Query(None, pattern="^(dir|git|both|ci)$"),
     policy_result: str | None = Query(None, pattern="^(pass|fail|not_evaluated)$"),
     pager: Pagination = Depends(),
-    session: Session = Depends(get_db),
+    session: Session = Depends(get_db, scope="function"),
 ):
     q = select(Scan)
     if repository_id:
@@ -84,7 +84,7 @@ def list_scans(
 
 
 @router.get("/scans/{scan_id}", response_model=ScanOut)
-def get_scan(scan_id: str, session: Session = Depends(get_db)):
+def get_scan(scan_id: str, session: Session = Depends(get_db, scope="function")):
     return scan_out(session, get_or_404(session, Scan, scan_id))
 
 
@@ -92,7 +92,7 @@ def get_scan(scan_id: str, session: Session = Depends(get_db)):
 def export_scan(
     scan_id: str,
     format: Literal["json", "csv", "sarif"] = "json",
-    session: Session = Depends(get_db),
+    session: Session = Depends(get_db, scope="function"),
 ):
     scan = get_or_404(session, Scan, scan_id)
     if scan.status != "completed":
@@ -118,7 +118,7 @@ def export_scan(
 
 
 @router.post("/scans/{scan_id}/cancel", response_model=ScanOut)
-def cancel_scan(scan_id: str, session: Session = Depends(get_db), jobs: ScanJobManager = Depends(get_jobs)):
+def cancel_scan(scan_id: str, session: Session = Depends(get_db, scope="function"), jobs: ScanJobManager = Depends(get_jobs)):
     scan = get_or_404(session, Scan, scan_id)
     if scan.status not in ("queued", "running"):
         raise SecretSentinelError(ErrorCode.INVALID_STATE)
@@ -140,7 +140,7 @@ def scan_findings(
     rule_id: str | None = Query(None, max_length=100),
     blocking: bool | None = None,
     pager: Pagination = Depends(),
-    session: Session = Depends(get_db),
+    session: Session = Depends(get_db, scope="function"),
 ):
     scan = get_or_404(session, Scan, scan_id)
     repo = session.get(Repository, scan.repository_id)

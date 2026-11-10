@@ -68,7 +68,7 @@ def list_findings(
     blocking: bool | None = None,
     latest_only: bool = Query(True, description="only findings from each repository's latest completed scan"),
     pager: Pagination = Depends(),
-    session: Session = Depends(get_db),
+    session: Session = Depends(get_db, scope="function"),
 ):
     q = select(Finding, Scan.mode, Repository.display_name).join(Scan, Finding.scan_id == Scan.id).join(
         Repository, Finding.repository_id == Repository.id
@@ -127,12 +127,12 @@ def _detail(session: Session, f: Finding) -> dict:
 
 
 @router.get("/findings/{finding_id}", response_model=FindingDetail)
-def get_finding(finding_id: str, session: Session = Depends(get_db)):
+def get_finding(finding_id: str, session: Session = Depends(get_db, scope="function")):
     return _detail(session, get_or_404(session, Finding, finding_id))
 
 
 @router.patch("/findings/{finding_id}", response_model=FindingDetail)
-def update_finding(finding_id: str, body: FindingUpdate, session: Session = Depends(get_db)):
+def update_finding(finding_id: str, body: FindingUpdate, session: Session = Depends(get_db, scope="function")):
     f = get_or_404(session, Finding, finding_id)
     if f.status == "suppressed":
         raise SecretSentinelError(ErrorCode.INVALID_STATE, "Deactivate the suppression first.")
@@ -166,7 +166,7 @@ def _suppression_out(s: Suppression) -> SuppressionOut:
 
 
 @router.get("/suppressions", response_model=list[SuppressionOut])
-def list_suppressions(repository_id: str | None = Query(None, max_length=36), session: Session = Depends(get_db)):
+def list_suppressions(repository_id: str | None = Query(None, max_length=36), session: Session = Depends(get_db, scope="function")):
     q = select(Suppression).order_by(Suppression.created_at.desc())
     if repository_id:
         q = q.where(Suppression.repository_id == repository_id)
@@ -174,7 +174,7 @@ def list_suppressions(repository_id: str | None = Query(None, max_length=36), se
 
 
 @router.post("/suppressions", response_model=SuppressionOut, status_code=status.HTTP_201_CREATED)
-def create_suppression(body: SuppressionCreate, session: Session = Depends(get_db)):
+def create_suppression(body: SuppressionCreate, session: Session = Depends(get_db, scope="function")):
     f = get_or_404(session, Finding, body.finding_id)
     today = datetime.now(timezone.utc).date()
     if body.expires_at < today or body.expires_at > today + timedelta(days=MAX_SUPPRESSION_DAYS):
@@ -208,7 +208,7 @@ def create_suppression(body: SuppressionCreate, session: Session = Depends(get_d
 
 
 @router.delete("/suppressions/{suppression_id}", response_model=SuppressionOut)
-def deactivate_suppression(suppression_id: str, session: Session = Depends(get_db)):
+def deactivate_suppression(suppression_id: str, session: Session = Depends(get_db, scope="function")):
     s = get_or_404(session, Suppression, suppression_id)
     s.active = False
     tag = f"db-{s.id[:8]}"
