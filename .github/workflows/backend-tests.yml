@@ -1,0 +1,98 @@
+name: Backend tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  GITLEAKS_VERSION: "8.30.1"
+  GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+
+jobs:
+  pytest:
+    name: pytest (ubuntu, real Gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Install pinned Gitleaks (checksum verified)
+        run: bash scripts/install_gitleaks.sh "$GITLEAKS_VERSION" "$GITLEAKS_SHA256" "$RUNNER_TEMP/bin"
+      - name: Install backend
+        run: python -m pip install -e "backend[dev]"
+      - name: Run tests
+        env:
+          GITLEAKS_PATH: ${{ runner.temp }}/bin/gitleaks
+        working-directory: backend
+        run: python -m pytest -q
+
+  gate-selftest:
+    name: CI gate self-test (exit codes + no raw secrets)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install pinned Gitleaks (checksum verified)
+        run: bash scripts/install_gitleaks.sh "$GITLEAKS_VERSION" "$GITLEAKS_SHA256" "$RUNNER_TEMP/bin"
+      - name: Install gate dependency only (same as secret-scan.yml)
+        run: python -m pip install --require-hashes --no-deps -r backend/requirements-ci.txt
+      - name: Detector self-test
+        run: python scripts/check_no_raw_secrets.py --self-test
+      - name: Gate self-test
+        env:
+          GITLEAKS_PATH: ${{ runner.temp }}/bin/gitleaks
+        run: bash scripts/ci_gate_selftest.sh 2>&1 | tee "$RUNNER_TEMP/gate-selftest.log"
+      - name: Verify this job's own log contains no canaries
+        run: python scripts/check_no_raw_secrets.py "$RUNNER_TEMP/gate-selftest.log"
+
+  pytest-windows:
+    # Windows 11 is the primary local platform; this job exercises the same suite
+    # on windows-latest. Marked experimental until it has a green history.
+    name: pytest (windows, experimental)
+    runs-on: windows-latest
+    continue-on-error: true
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      # Exercises the documented Windows 11 setup path end to end.
+      - name: Bootstrap with scripts/bootstrap_windows.ps1
+        shell: pwsh
+        run: ./scripts/bootstrap_windows.ps1 -SkipFrontend
+      - name: Run tests
+        shell: pwsh
+        working-directory: backend
+        run: |
+          $env:GITLEAKS_PATH = (Resolve-Path ..\tools\gitleaks\gitleaks.exe).Path
+          ..\.venv\Scripts\python.exe -m pytest -q
+      - name: Run a scan via scripts/run_scanner.ps1 (expects blocking findings)
+        shell: pwsh
+        run: |
+          .\.venv\Scripts\python.exe -m secretsentinel demo create "$env:RUNNER_TEMP\demo"
+          ./scripts/run_scanner.ps1 -Path "$env:RUNNER_TEMP\demo" -Mode both -NoDb
+          if ($LASTEXITCODE -ne 1) { throw "expected exit code 1 (blocking findings), got $LASTEXITCODE" }
+          exit 0
