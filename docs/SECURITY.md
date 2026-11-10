@@ -48,4 +48,5 @@ Triaging a finding does not make a detected credential safe.
 Remote operation needs reviewed authentication, TLS, authorization, deployment
 isolation and data management. Optional bearer-token/ingestion hooks are not a
 claim that the MVP is ready for multi-user production. Optional attestation
-modules are disabled and have no deployed-contract or Sepolia validation claim.
+modules are disabled by default; the contract and client are tested on a local
+Hardhat chain only, with no deployed-contract or Sepolia validation claim.

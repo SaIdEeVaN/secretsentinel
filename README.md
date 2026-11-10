@@ -162,21 +162,38 @@ interpreter; the browser runner otherwise uses `.venv`, then `python`.
 
 ## CI and further documentation
 
+- [Windows 11 setup in detail](docs/SETUP_WINDOWS.md)
 - [Required GitHub security check setup](docs/CI_SETUP.md)
 - [Architecture and API](docs/ARCHITECTURE.md)
 - [Security model and limitations](docs/SECURITY.md)
+- [Threat model (PRD section 16)](docs/THREAT_MODEL.md)
+- [Test plan and PRD test-case matrix](docs/TEST_PLAN.md)
 - [Synthetic demonstration](docs/DEMO.md)
 - [Local validation results and remaining external checks](docs/VALIDATION.md)
 
-CI runs tests on pull requests and pushes to `main` and `codex/**`. A maintainer
-must configure the required status check in GitHub settings to block merges;
-the workflow alone cannot enforce branch protection. The default branch need
-not be named `main`; the security job scans all pull requests.
+CI runs on pull requests and pushes to `main`. A maintainer must configure the
+required status check in GitHub settings to block merges; the workflow alone
+cannot enforce branch protection. The security job scans all pull requests.
 
-Optional Sepolia attestation code is experimental, disabled by default, and is
-not part of this MVP's deployment claim. There is no deployed smart contract or
-on-chain security guarantee. Hosted/multi-user operation needs additional
-authentication, TLS and authorization controls; keep the MVP on loopback.
+Hosted/multi-user operation needs additional authentication, TLS and
+authorization controls; keep the MVP on loopback.
+
+## Optional: signed scan attestations (P2)
+
+Disabled by default (`ENABLE_BLOCKCHAIN=false`) and not needed for scanning.
+When enabled, `secretsentinel attest create <scan-id>` signs a canonical,
+non-sensitive scan summary (scan id, salted commit commitment, tool/ruleset/
+policy digests, status and counts) and `attest publish` registers only its
+SHA-256 digest in [`contracts/src/ScanRegistry.sol`](contracts/src/ScanRegistry.sol).
+`attest verify bundle.json --onchain` (or the dashboard's **Attestations** page)
+checks the digest, signature, trusted signer, chain binding and registry record.
+
+The contract and the Python client are tested on a local Hardhat chain
+(`cd contracts && npm ci && npx hardhat test`, plus the `chain` interop tests in
+CI). Nothing has been deployed to Sepolia by this project. A verified
+attestation shows **who attested to a scan result**; it never proves the code
+is secure. Use a dedicated publishing key referenced via
+`ATTESTATION_SIGNER_KEY_REFERENCE=env:VAR` or `keystore:<path>`, never a raw key.
 
 ## Troubleshooting
 
@@ -189,7 +206,9 @@ authentication, TLS and authorization controls; keep the MVP on loopback.
 - **PowerShell script blocked:** use a process-scoped policy permitted by your
   organization, or run the documented commands manually. No global policy change
   is required by the application.
-- **Unwritable package cache in a cloud workspace:** set `PIP_CACHE_DIR` and
-  `npm_config_cache` to writable directories under `/workspace`.
+- **Unwritable package cache:** point `PIP_CACHE_DIR` and `npm_config_cache` at
+  writable directories.
+- **Playwright cannot find a browser:** run `npx playwright install chromium`, or set
+  `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to an existing Chromium binary.
 
 Original code is [MIT licensed](LICENSE); dependencies retain their own licenses.

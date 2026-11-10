@@ -40,4 +40,5 @@ addopts = "-ra"
 filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]
 markers = [
   "gitleaks: requires a real Gitleaks executable (GITLEAKS_PATH or PATH)",
+  "chain: requires a local dev chain with a deployed ScanRegistry (P2 interop)",
 ]

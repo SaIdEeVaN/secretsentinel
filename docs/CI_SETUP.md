@@ -46,8 +46,8 @@ error/redaction exit-code checks before opening the test PR.
 
 ## Scope and trust
 
-PR scans cover commits after the base SHA. Pushes to `main` and `codex/**` scan
-commits after the previous push when it is available. Manual and weekly scheduled
+PR scans cover commits after the base SHA. Pushes to `main` scan commits after
+the previous push when it is available. Manual and weekly scheduled
 runs cover working tree plus full history; schedules execute on GitHub's default
 branch. Reviewed baselines cover accepted pre-existing findings and expire.
 
