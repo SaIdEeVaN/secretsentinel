@@ -83,7 +83,7 @@ jobs:
       # Exercises the documented Windows 11 setup path end to end.
       - name: Bootstrap with scripts/bootstrap_windows.ps1
         shell: pwsh
-        run: ./scripts/bootstrap_windows.ps1 -SkipFrontend
+        run: ./scripts/bootstrap_windows.ps1 -SkipFrontend -Dev
       - name: Run tests
         shell: pwsh
         working-directory: backend

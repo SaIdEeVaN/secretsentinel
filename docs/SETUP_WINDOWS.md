@@ -15,9 +15,14 @@ Close and reopen PowerShell so `git`, `python` and `node` are on PATH, then chec
 
 ```powershell
 git --version
-python --version   # 3.11 or newer
+py --list          # needs one of 3.11, 3.12, 3.13 or 3.14
 node --version     # 20.19 or newer
 ```
+
+Python 3.15 is **not supported yet**: PyYAML (and the optional `ckzg`) have no
+Windows packages for it, so pip falls back to compiling C code. You can keep 3.15
+installed; the setup script prefers `python` only if it is 3.11-3.14 and
+otherwise uses the `py` launcher to pick 3.13, 3.12, 3.14 or 3.11.
 
 If `python` opens the Microsoft Store, disable the *App execution aliases* for
 `python.exe`/`python3.exe` in **Settings → Apps → Advanced app settings**.
@@ -31,10 +36,13 @@ powershell -ExecutionPolicy Bypass -File scripts\bootstrap_windows.ps1
 ```
 
 `-ExecutionPolicy Bypass` applies only to that one process; no global policy is
-changed. The script:
+changed. The same command works from Command Prompt. The script stops at the
+first failing step and:
 
-1. checks Python, Git and Node versions;
-2. creates `.venv` and installs the backend (`pip install -e backend[dev]`);
+1. checks Git and Node, and finds a supported Python;
+2. creates `.venv` (recreating one made with an unsupported Python) and installs
+   the backend (`pip install -e backend`; add `-Dev` for tests and the optional
+   blockchain extra);
 3. downloads Gitleaks **8.30.1** for Windows x64 into `tools\gitleaks\` and
    verifies its SHA-256 against the pinned value
    `d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e`
@@ -82,6 +90,8 @@ registered; separate several roots with `;`.
 
 | Symptom | Fix |
 |---|---|
+| `Failed building wheel for pyyaml` or `Microsoft Visual C++ 14.0 or greater is required` | Python is too new (3.15). `winget install Python.Python.3.12`, then re-run the bootstrap; it rebuilds `.venv` with 3.12. Installing the C++ Build Tools is not needed. |
+| Project lives under OneDrive | Works, but syncing `.venv`/`node_modules` is slow and can lock files. Prefer a non-synced folder such as `C:\dev\secretsentinel`. |
 | `SCANNER_NOT_FOUND` | Set `GITLEAKS_PATH` (the CLI never reads `.env` on its own) or pass `--gitleaks tools\gitleaks\gitleaks.exe`. |
 | Antivirus quarantines `gitleaks.exe` | Restore it from quarantine after verifying the checksum, or add an exclusion for `tools\gitleaks\`. |
 | `UNSUPPORTED_REPO` in git mode | Scan the repository **root**, or use `-Mode dir` for folders that are not Git repositories. |

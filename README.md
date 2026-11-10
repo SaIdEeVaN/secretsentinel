@@ -21,7 +21,9 @@ the repository is free of secrets**.
 ## Quick start: Windows 11
 
 Install Git, Python 3.12 and Node.js LTS (22 or 24), then open PowerShell in this
-checkout. Python must be available as `python`.
+checkout. Python **3.11-3.14** is supported. Python 3.15 is not yet: PyYAML has
+no Windows packages for it, so pip would need the Microsoft C++ Build Tools. The
+setup script picks a supported version via `python` or the `py` launcher.
 
 ```powershell
 winget install Git.Git
@@ -132,7 +134,9 @@ a real exposure instead of rotating/revoking the credential.
 
 ## Tests
 
-Activate `.venv` and make Gitleaks available via `GITLEAKS_PATH` or PATH.
+Install the dev extras first (`bootstrap_windows.ps1 -Dev`, `bootstrap_unix.sh --dev`
+or `pip install -e "backend[dev]"`), activate `.venv`, and make Gitleaks available
+via `GITLEAKS_PATH` or PATH.
 
 ```bash
 cd backend
@@ -197,6 +201,9 @@ is secure. Use a dedicated publishing key referenced via
 
 ## Troubleshooting
 
+- **`Failed building wheel for pyyaml` / `Microsoft Visual C++ 14.0 or greater is
+  required`:** your Python is too new (e.g. 3.15). Install Python 3.12
+  (`winget install Python.Python.3.12`) and re-run the bootstrap; it recreates `.venv`.
 - **Scanner not found:** check `GITLEAKS_PATH`; the CLI will not load `.env`.
 - **Path not allowed:** add the folder to `SCAN_ROOT_ALLOWLIST` and restart the
   backend with `--env-file .env`.

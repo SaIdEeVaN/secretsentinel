@@ -10,13 +10,28 @@ root="$PWD"
 version="8.30.1"
 sha256_linux_x64="551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
 
-command -v python3 >/dev/null || { echo "python3 (3.11+) is required" >&2; exit 1; }
-command -v git >/dev/null || { echo "git is required" >&2; exit 1; }
-python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' || { echo "Python 3.11+ required" >&2; exit 1; }
+# Usage: scripts/bootstrap_unix.sh [--dev]   (--dev adds test + optional blockchain extras)
+extras=""
+[[ "${1:-}" == "--dev" ]] && extras="[dev]"
 
-[[ -d .venv ]] || python3 -m venv .venv
+command -v git >/dev/null || { echo "git is required" >&2; exit 1; }
+
+# Python 3.11-3.14: every dependency publishes prebuilt wheels for these.
+supported() { "$1" -c 'import sys; sys.exit(0 if (3, 11) <= sys.version_info[:2] <= (3, 14) else 1)' 2>/dev/null; }
+python=""
+for candidate in python3 python3.13 python3.12 python3.14 python3.11; do
+  if command -v "$candidate" >/dev/null && supported "$candidate"; then python="$candidate"; break; fi
+done
+[[ -n "$python" ]] || { echo "No supported Python found: install Python 3.12 (3.11-3.14 supported)." >&2; exit 1; }
+echo "Using $($python --version) ($python)"
+
+if [[ -x .venv/bin/python ]] && ! supported .venv/bin/python; then
+  echo "Existing .venv uses an unsupported Python; recreating it."
+  rm -rf .venv
+fi
+[[ -x .venv/bin/python ]] || "$python" -m venv .venv
 .venv/bin/python -m pip install --disable-pip-version-check -q --upgrade pip
-.venv/bin/python -m pip install --disable-pip-version-check -q -e "backend[dev]"
+.venv/bin/python -m pip install --disable-pip-version-check -q -e "backend${extras}"
 
 gitleaks_path="$(command -v gitleaks || true)"
 if [[ -z "$gitleaks_path" ]]; then

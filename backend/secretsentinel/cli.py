@@ -280,8 +280,9 @@ def cmd_doctor(args) -> int:
     except SecretSentinelError as exc:
         ok = False
         print(f"  ruleset   INVALID    {exc.message}")
-    roots = ", ".join(str(r) for r in settings.scan_root_allowlist) or "(none - dashboard scans disabled)"
+    roots = ", ".join(str(r) for r in settings.scan_root_allowlist) or "(none in the environment)"
     print(f"  dashboard scan roots: {roots}")
+    print("  note: doctor reads environment variables only; `serve --env-file .env` loads .env")
     print(f"  database: {settings.db_url}")
     return EXIT_PASS if ok else EXIT_SCAN_ERROR
 
