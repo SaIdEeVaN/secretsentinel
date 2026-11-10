@@ -8,10 +8,12 @@ import { KeyValue, PageHeader, Pagination } from "../components/Widgets.jsx";
 import { MODE_LABEL, formatDate, formatDuration, shortSha } from "../components/format.js";
 import { useAsync, usePolling } from "../hooks/useAsync.js";
 import AttestationPanel from "./AttestationPanel.jsx";
+import { localScanningEnabled, useSystem } from "../context/system.js";
 
 export default function ScanDetail({ blockchainEnabled }) {
   const { scanId } = useParams();
   const navigate = useNavigate();
+  const { status: system } = useSystem();
   const [page, setPage] = useState(1);
   const [actionError, setActionError] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
@@ -84,9 +86,11 @@ export default function ScanDetail({ blockchainEnabled }) {
                 {actionBusy ? "Cancelling…" : "Cancel"}
               </button>
             )}
-            <Link to={`/scan/new?repository=${s.repository_id}`} className="btn btn-ghost">
-              Rescan
-            </Link>
+            {localScanningEnabled(system) && s.source !== "ingest" && (
+              <Link to={`/scan/new?repository=${s.repository_id}`} className="btn btn-ghost">
+                Rescan
+              </Link>
+            )}
           </>
         }
       />

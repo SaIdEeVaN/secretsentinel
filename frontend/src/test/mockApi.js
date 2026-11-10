@@ -40,6 +40,9 @@ export const STATUS = {
   max_concurrent_scans: 1,
   auth_required: false,
   blockchain_enabled: false,
+  local_scanning_enabled: true,
+  ingest_enabled: false,
+  hosted: false,
 };
 
 export function finding(overrides = {}) {

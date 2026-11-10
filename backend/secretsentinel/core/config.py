@@ -57,7 +57,7 @@ class Settings:
     app_env: str = "development"
     host: str = "127.0.0.1"
     port: int = 8000
-    db_url: str = field(default_factory=default_db_url)
+    db_url: str = field(default_factory=default_db_url, repr=False)
     gitleaks_path: str = "gitleaks"
     git_path: str = "git"
     scanner_timeout_seconds: int = 120
@@ -98,6 +98,11 @@ class Settings:
             raise ValueError("FAIL_ON must be one of critical|high|medium|low|none")
         cors = env.get("CORS_ORIGINS")
         hosts = env.get("TRUSTED_HOSTS")
+        trusted = tuple(p.strip() for p in hosts.split(",") if p.strip()) if hosts else cls.trusted_hosts
+        # Render sets this to the service's public hostname (e.g. name.onrender.com).
+        render_host = (env.get("RENDER_EXTERNAL_HOSTNAME") or "").strip().lower()
+        if render_host and render_host not in trusted:
+            trusted = trusted + (render_host,)
         settings = cls(
             app_env=env.get("APP_ENV", "development"),
             host=env.get("HOST", "127.0.0.1"),
@@ -113,7 +118,7 @@ class Settings:
             log_level=(env.get("LOG_LEVEL") or "INFO").upper(),
             enable_blockchain=_bool(env.get("ENABLE_BLOCKCHAIN")),
             cors_origins=tuple(p.strip() for p in cors.split(",") if p.strip()) if cors else cls.cors_origins,
-            trusted_hosts=tuple(p.strip() for p in hosts.split(",") if p.strip()) if hosts else cls.trusted_hosts,
+            trusted_hosts=trusted,
             api_token=env.get("API_TOKEN") or None,
             ingest_token=env.get("INGEST_TOKEN") or None,
             allow_remote=_bool(env.get("ALLOW_REMOTE")),

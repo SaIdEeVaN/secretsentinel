@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api/client.js";
 import ScanStatus from "../components/ScanStatus.jsx";
-import { ErrorState, Loading } from "../components/States.jsx";
+import { EmptyState, ErrorState, Loading } from "../components/States.jsx";
 import { Field, PageHeader } from "../components/Widgets.jsx";
 import { useAsync, usePolling } from "../hooks/useAsync.js";
 
@@ -130,6 +130,18 @@ export default function NewScan() {
 
   const roots = status.data?.allowed_roots ?? [];
   const scannerMissing = status.data && !status.data.scanner.available;
+
+  if (status.data && !status.data.local_scanning_enabled && status.data.hosted) {
+    return (
+      <>
+        <PageHeader title="New Scan" />
+        <EmptyState title="Scanning is done by GitHub Actions for this hosted dashboard.">
+          It never scans or clones code on the server. Results arrive from the upload workflow described in
+          docs/HOSTING.md.
+        </EmptyState>
+      </>
+    );
+  }
 
   return (
     <>

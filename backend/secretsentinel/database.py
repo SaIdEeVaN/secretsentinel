@@ -33,8 +33,30 @@ def _prepare_sqlite_file(url: str) -> None:
         os.close(fd)
 
 
+def normalize_db_url(url: str) -> str:
+    """Accept provider-style Postgres URLs and use the psycopg 3 driver.
+
+    Render, Supabase, Neon etc. hand out ``postgres://`` or ``postgresql://``
+    connection strings; SQLAlchemy needs ``postgresql+psycopg://``.
+    """
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://") :]
+    if url.startswith("postgresql://"):
+        url = "postgresql+psycopg://" + url[len("postgresql://") :]
+    return url
+
+
+def redact_db_url(url: str) -> str:
+    """Database URL safe to print (password hidden)."""
+    try:
+        return make_url(normalize_db_url(url)).render_as_string(hide_password=True)
+    except Exception:  # noqa: BLE001 - never echo an unparsable URL that may hold a password
+        return "<unparsable database URL>"
+
+
 def init_engine(db_url: str) -> Engine:
     global _engine, _session_factory, _engine_url
+    db_url = normalize_db_url(db_url)
     with _lock:
         if _engine is not None and _engine_url == db_url:
             return _engine
@@ -44,6 +66,9 @@ def init_engine(db_url: str) -> Engine:
         kwargs: dict = {}
         if db_url.startswith("sqlite"):
             kwargs["connect_args"] = {"check_same_thread": False, "timeout": 30}
+        else:
+            # Hosted databases drop idle connections; check before use.
+            kwargs.update(pool_pre_ping=True, pool_recycle=300)
         engine = create_engine(db_url, **kwargs)
         if db_url.startswith("sqlite"):
 

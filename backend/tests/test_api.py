@@ -1,5 +1,6 @@
 """FastAPI contract, validation, security middleware and triage workflow."""
 
+import os
 import time
 from datetime import date, timedelta
 from pathlib import Path
@@ -25,10 +26,26 @@ def root(tmp_path) -> Path:
 
 @pytest.fixture
 def make_client(tmp_path, root, fake_gitleaks):
+    # Set SECRETSENTINEL_TEST_DATABASE_URL to run this suite against Postgres
+    # (the hosted deployment's database); each client starts from an empty schema.
+    pg_url = os.environ.get("SECRETSENTINEL_TEST_DATABASE_URL")
+
     def make(**overrides):
+        db_url = f"sqlite:///{(tmp_path / 'api.db').as_posix()}"
+        if pg_url:
+            from sqlalchemy import create_engine
+
+            from secretsentinel.database import normalize_db_url, reset_engine
+            from secretsentinel.models import Base
+
+            reset_engine()
+            engine = create_engine(normalize_db_url(pg_url))
+            Base.metadata.drop_all(engine)
+            engine.dispose()
+            db_url = pg_url
         settings = Settings(
             gitleaks_path=fake_gitleaks.path,
-            db_url=f"sqlite:///{(tmp_path / 'api.db').as_posix()}",
+            db_url=db_url,
             scan_root_allowlist=(root,),
         ).with_overrides(**overrides)
         return TestClient(create_app(settings), base_url="http://127.0.0.1:8000")

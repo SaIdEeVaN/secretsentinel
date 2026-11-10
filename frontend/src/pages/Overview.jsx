@@ -7,6 +7,30 @@ import { EmptyState, ErrorState, Loading } from "../components/States.jsx";
 import { PageHeader, SeverityBars, StatCard, TrendChart } from "../components/Widgets.jsx";
 import { MODE_LABEL, timeAgo } from "../components/format.js";
 import { useAsync } from "../hooks/useAsync.js";
+import { localScanningEnabled, useSystem } from "../context/system.js";
+
+function CiOnboarding() {
+  return (
+    <div className="card p-6">
+      <h2 className="text-lg font-semibold">Waiting for the first scan upload</h2>
+      <p className="mt-2 text-sm text-muted">
+        This hosted dashboard does not scan code itself. GitHub Actions scans each repository and uploads only the
+        redacted report here.
+      </p>
+      <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm">
+        <li>
+          Add <span className="mono">.github/workflows/dashboard-upload.yml</span> to the repository (see{" "}
+          <span className="mono">docs/HOSTING.md</span>).
+        </li>
+        <li>
+          In the repository settings, add the variable <span className="mono">SECRETSENTINEL_DASHBOARD_URL</span> (this
+          site's address) and the secret <span className="mono">SECRETSENTINEL_INGEST_TOKEN</span>.
+        </li>
+        <li>Push to the default branch or run the workflow manually. The scan appears here when it finishes.</li>
+      </ol>
+    </div>
+  );
+}
 
 function Onboarding({ status, onDemo, demoBusy, demoError }) {
   const roots = status?.allowed_roots ?? [];
@@ -56,6 +80,8 @@ function Onboarding({ status, onDemo, demoBusy, demoError }) {
 
 export default function Overview() {
   const navigate = useNavigate();
+  const { status: system } = useSystem();
+  const local = localScanningEnabled(system);
   const metrics = useAsync(() => api.overview(), []);
   const status = useAsync(() => api.systemStatus(), []);
   const current = useAsync(() => api.findings({ page_size: 8 }), []);
@@ -82,16 +108,21 @@ export default function Overview() {
         title="Overview"
         subtitle="Current state across each repository's most recent completed scan."
         actions={
-          <Link to="/scan/new" className="btn btn-primary">
-            ＋ New Scan
-          </Link>
+          local ? (
+            <Link to="/scan/new" className="btn btn-primary">
+              ＋ New Scan
+            </Link>
+          ) : null
         }
       />
       {metrics.loading && !m && <Loading />}
       <ErrorState error={metrics.error} onRetry={metrics.reload} />
-      {m && m.scans_total === 0 && (
-        <Onboarding status={status.data} onDemo={createDemo} demoBusy={demoBusy} demoError={demoError} />
-      )}
+      {m && m.scans_total === 0 &&
+        (local ? (
+          <Onboarding status={status.data} onDemo={createDemo} demoBusy={demoBusy} demoError={demoError} />
+        ) : (
+          <CiOnboarding />
+        ))}
       {m && m.scans_total > 0 && (
         <div className="space-y-5">
           <section aria-label="Summary" className="grid grid-cols-2 gap-3 lg:grid-cols-5">

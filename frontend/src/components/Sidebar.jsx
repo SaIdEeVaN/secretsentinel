@@ -19,15 +19,17 @@ function Logo() {
       </svg>
       <div className="leading-tight">
         <div className="font-bold tracking-tight">SecretSentinel</div>
-        <div className="text-[11px] text-muted">local · redacted by design</div>
+        <div className="text-[11px] text-muted">secret scanning · redacted by design</div>
       </div>
     </div>
   );
 }
 
-export default function Sidebar({ blockchainEnabled, theme, onToggleTheme }) {
+export default function Sidebar({ blockchainEnabled, localScanning = true, onSignOut, theme, onToggleTheme }) {
   const [open, setOpen] = useState(false);
-  const links = blockchainEnabled ? [...LINKS.slice(0, 5), { to: "/attestations", label: "Attestations", icon: "⛓" }, LINKS[5]] : LINKS;
+  let links = blockchainEnabled ? [...LINKS.slice(0, 5), { to: "/attestations", label: "Attestations", icon: "⛓" }, LINKS[5]] : LINKS;
+  // Hosted dashboards receive results from CI and cannot scan local folders.
+  if (!localScanning) links = links.filter((l) => l.to !== "/scan/new");
   const linkCls = ({ isActive }) =>
     `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium ${
       isActive ? "bg-surface-2 text-ink border border-line" : "text-muted hover:text-ink hover:bg-surface-2 border border-transparent"
@@ -73,6 +75,11 @@ export default function Sidebar({ blockchainEnabled, theme, onToggleTheme }) {
           <button type="button" className="btn btn-ghost w-full text-xs" onClick={onToggleTheme}>
             {theme === "light" ? "☾ Dark theme" : "☀ Light theme"}
           </button>
+          {onSignOut && (
+            <button type="button" className="btn btn-ghost mt-2 w-full text-xs" onClick={onSignOut}>
+              Sign out
+            </button>
+          )}
           <p className="mt-3 text-[11px] leading-snug text-muted">
             Secret values are never stored, returned or displayed. Severity is a detector risk estimate.
           </p>

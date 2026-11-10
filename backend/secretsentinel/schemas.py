@@ -254,6 +254,9 @@ class SystemStatus(BaseModel):
     max_concurrent_scans: int
     auth_required: bool
     blockchain_enabled: bool
+    local_scanning_enabled: bool
+    ingest_enabled: bool
+    hosted: bool
 
 
 class AuditEventOut(BaseModel):

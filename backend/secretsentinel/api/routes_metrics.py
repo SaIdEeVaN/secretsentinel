@@ -120,6 +120,9 @@ def system_status(settings: Settings = Depends(get_settings)):
         max_concurrent_scans=settings.max_concurrent_scans,
         auth_required=bool(settings.api_token),
         blockchain_enabled=settings.enable_blockchain,
+        local_scanning_enabled=bool(settings.scan_root_allowlist),
+        ingest_enabled=bool(settings.ingest_token),
+        hosted=not settings.is_loopback,
     )
 
 

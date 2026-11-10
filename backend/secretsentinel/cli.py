@@ -283,7 +283,9 @@ def cmd_doctor(args) -> int:
     roots = ", ".join(str(r) for r in settings.scan_root_allowlist) or "(none in the environment)"
     print(f"  dashboard scan roots: {roots}")
     print("  note: doctor reads environment variables only; `serve --env-file .env` loads .env")
-    print(f"  database: {settings.db_url}")
+    from .database import redact_db_url
+
+    print(f"  database: {redact_db_url(settings.db_url)}")
     return EXIT_PASS if ok else EXIT_SCAN_ERROR
 
 
@@ -320,7 +322,9 @@ def cmd_db(args) -> int:
 
     url = make_url(settings.db_url)
     if args.db_cmd == "path":
-        print(url.database or settings.db_url)
+        from .database import redact_db_url
+
+        print(url.database or redact_db_url(settings.db_url))
         return EXIT_PASS
     if args.db_cmd == "reset":
         if not args.yes:

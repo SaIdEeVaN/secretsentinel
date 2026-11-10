@@ -1,17 +1,35 @@
 /**
  * Minimal API client for the loopback SecretSentinel backend.
  *
- * The backend only ever returns sanitized fields; this client additionally
- * never persists anything sensitive in the browser. An optional API token
- * (remote mode) is held in memory only - never in localStorage.
+ * The backend only ever returns sanitized fields. The optional dashboard API
+ * token (hosted/remote mode) is kept in memory and in sessionStorage, so it
+ * survives a reload but is discarded when the tab closes. It is never written
+ * to localStorage, and no third-party secret is ever stored.
  */
 
 const BASE = (import.meta.env?.VITE_API_BASE ?? "/api/v1").replace(/\/$/, "");
 
-let authToken = null;
+const TOKEN_KEY = "secretsentinel.apiToken";
+export const UNAUTHORIZED_EVENT = "secretsentinel:unauthorized";
+
+function readStoredToken() {
+  try {
+    return window.sessionStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+let authToken = readStoredToken();
 
 export function setAuthToken(token) {
   authToken = token || null;
+  try {
+    if (authToken) window.sessionStorage.setItem(TOKEN_KEY, authToken);
+    else window.sessionStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* storage unavailable: keep the token in memory only */
+  }
 }
 
 export function hasAuthToken() {
@@ -65,6 +83,7 @@ export async function request(path, { method = "GET", body, signal, responseType
   }
   if (!res.ok) {
     const e = data?.error;
+    if (res.status === 401) window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
     throw new ApiError(e?.code ?? `HTTP_${res.status}`, e?.message ?? "Request failed.", res.status, e?.fields);
   }
   return data;

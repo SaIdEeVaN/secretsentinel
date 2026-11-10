@@ -4,6 +4,7 @@ import { EmptyState, ErrorState, Loading } from "../components/States.jsx";
 import { Field, KeyValue, PageHeader } from "../components/Widgets.jsx";
 import { formatDate, timeAgo } from "../components/format.js";
 import { useAsync } from "../hooks/useAsync.js";
+import { useSystem } from "../context/system.js";
 
 function Ok({ ok, children }) {
   return (
@@ -20,6 +21,7 @@ export default function Settings({ onAuthChanged }) {
   const audit = useAsync(() => api.auditEvents({ limit: 25 }), []);
   const [token, setToken] = useState("");
   const [error, setError] = useState(null);
+  const { signOut } = useSystem();
   const s = status.data;
 
   const remove = async (repo) => {
@@ -59,6 +61,8 @@ export default function Settings({ onAuthChanged }) {
                 ["Max file size", `${s.max_file_mb} MB`],
                 ["Concurrent scans", s.max_concurrent_scans],
                 ["Environment", s.app_env],
+                ["Mode", s.hosted ? "hosted (results uploaded from CI)" : "local"],
+                ["CI uploads", s.ingest_enabled ? "enabled" : "disabled (set INGEST_TOKEN)"],
                 ["API authentication", s.auth_required ? "required (remote mode)" : "not required (loopback only)"],
                 ["Blockchain attestations", s.blockchain_enabled ? "enabled (Sepolia, optional)" : "disabled"],
               ]}
@@ -91,6 +95,11 @@ export default function Settings({ onAuthChanged }) {
               <button type="submit" className="btn btn-primary">
                 Use token
               </button>
+              {signOut && (
+                <button type="button" className="btn btn-ghost" onClick={signOut}>
+                  Sign out
+                </button>
+              )}
             </form>
           </section>
         )}
