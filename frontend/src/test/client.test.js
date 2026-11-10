@@ -28,4 +28,20 @@ describe("api client", () => {
     expect(calls[1].init.headers.Authorization).toBeUndefined();
     expect(window.localStorage.length === 0 || !Object.values(window.localStorage).includes("tok")).toBe(true);
   });
+
+  it("downloads reports with the in-memory token and still handles JSON errors", async () => {
+    const { calls } = mockApi({
+      "GET /scans/s1/export": { schema: "secretsentinel-report/v1" },
+      "GET /scans/failed/export": { __status: 409, body: { error: { code: "INVALID_STATE", message: "Scan not complete" } } },
+    });
+    setAuthToken("tab-only-token");
+    try {
+      const blob = await api.exportScan("s1", "json");
+      expect(await blob.text()).toContain("secretsentinel-report/v1");
+      expect(calls[0].init.headers.Authorization).toBe("Bearer tab-only-token");
+      await expect(api.exportScan("failed", "csv")).rejects.toMatchObject({ code: "INVALID_STATE", status: 409 });
+    } finally {
+      setAuthToken(null);
+    }
+  });
 });

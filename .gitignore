@@ -12,6 +12,8 @@ dist/
 # Node / frontend
 node_modules/
 frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
 contracts/artifacts/
 contracts/cache/
 

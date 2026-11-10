@@ -16,6 +16,12 @@ describe("SeverityBadge", () => {
 });
 
 describe("ScanStatus", () => {
+  it.each(["not_evaluated", undefined, "unexpected"])("does not pass a completed scan with policy result %s", (policy_result) => {
+    render(<><ResultPill scan={scan({ policy_result })} /><ScanStatus scan={scan({ policy_result })} /></>);
+    expect(screen.getByText("ERROR")).toBeInTheDocument();
+    expect(screen.getByText(FAILED_TEXT)).toBeInTheDocument();
+    expect(screen.queryByText("PASS")).not.toBeInTheDocument();
+  });
   it("uses the PRD wording for clean scans and never claims security", () => {
     render(<ScanStatus scan={scan({ policy_result: "pass", total_findings: 0, blocking_findings: 0 })} />);
     expect(screen.getByText(CLEAN_TEXT)).toBeInTheDocument();

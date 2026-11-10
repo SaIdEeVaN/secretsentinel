@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client.js";
 import FindingTable from "../components/FindingTable.jsx";
@@ -13,6 +13,9 @@ export default function ScanDetail({ blockchainEnabled }) {
   const { scanId } = useParams();
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
+  const [actionError, setActionError] = useState(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [exportFormat, setExportFormat] = useState("json");
   const scan = useAsync(() => api.scan(scanId), [scanId]);
   const findings = useAsync(() => api.scanFindings(scanId, { page, page_size: 50 }), [scanId, page]);
   const s = scan.data;
@@ -26,9 +29,44 @@ export default function ScanDetail({ blockchainEnabled }) {
     Boolean(active),
   );
 
+  // The last findings request may finish before the scan's final transaction.
+  // Refresh once the terminal status arrives so the final result is never stale.
+  useEffect(() => {
+    if (s && !active) findings.reload();
+  }, [s?.status]);
+
   const cancel = async () => {
-    await api.cancelScan(scanId).catch(() => {});
-    scan.reload();
+    setActionBusy(true);
+    setActionError(null);
+    try {
+      await api.cancelScan(scanId);
+      await scan.reload();
+    } catch (error) {
+      setActionError(error);
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const exportReport = async () => {
+    setActionBusy(true);
+    setActionError(null);
+    let url;
+    try {
+      const report = await api.exportScan(scanId, exportFormat);
+      url = URL.createObjectURL(report);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `secretsentinel-${scanId}.${exportFormat}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      setActionError(error);
+    } finally {
+      if (url) setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setActionBusy(false);
+    }
   };
 
   if (scan.loading && !s) return <Loading />;
@@ -42,8 +80,8 @@ export default function ScanDetail({ blockchainEnabled }) {
           <>
             <ResultPill scan={s} />
             {active && (
-              <button type="button" className="btn btn-danger" onClick={cancel}>
-                Cancel
+              <button type="button" className="btn btn-danger" onClick={cancel} disabled={actionBusy}>
+                {actionBusy ? "Cancelling…" : "Cancel"}
               </button>
             )}
             <Link to={`/scan/new?repository=${s.repository_id}`} className="btn btn-ghost">
@@ -53,7 +91,24 @@ export default function ScanDetail({ blockchainEnabled }) {
         }
       />
       <div className="space-y-5">
+        <ErrorState error={actionError} />
         <ScanStatus scan={s} />
+        {s.status === "completed" && (
+          <section className="card flex flex-wrap items-end gap-3 p-4" aria-label="Export report">
+            <div className="min-w-40">
+              <label className="label" htmlFor="export-format">Report format</label>
+              <select className="input" id="export-format" value={exportFormat} onChange={(event) => setExportFormat(event.target.value)}>
+                <option value="json">JSON</option>
+                <option value="csv">CSV</option>
+                <option value="sarif">SARIF</option>
+              </select>
+            </div>
+            <button type="button" className="btn btn-ghost" disabled={actionBusy} onClick={exportReport}>
+              {actionBusy ? "Preparing report…" : "Download report"}
+            </button>
+            <p className="text-xs text-muted">All findings from this scan, with secret values redacted.</p>
+          </section>
+        )}
         {s.warnings.length > 0 && (
           <div className="card border-warn/50 p-4 text-sm">
             <p className="font-semibold text-warn">Warnings</p>

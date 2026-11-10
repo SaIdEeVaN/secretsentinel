@@ -15,6 +15,7 @@ from ..schemas import FindingDetail, FindingOut, FindingUpdate, Page, Suppressio
 from ..services.policy import MAX_SUPPRESSION_DAYS
 from ..services.remediation import get_remediation
 from ..services.rules import load_ruleset
+from ..services.types import SEVERITY_ORDER
 from ..services.store import audit
 from .deps import Pagination, finding_out, get_db, get_or_404
 
@@ -214,6 +215,9 @@ def deactivate_suppression(suppression_id: str, session: Session = Depends(get_d
     for f in session.scalars(select(Finding).where(Finding.suppression_id == tag)).all():
         f.status = "open"
         f.suppression_id = None
+        scan = session.get(Scan, f.scan_id)
+        threshold = scan.fail_on if scan else "high"
+        f.blocking = threshold != "none" and SEVERITY_ORDER.get(f.severity, 0) >= SEVERITY_ORDER.get(threshold, 3)
         f.status_updated_at = datetime.now(timezone.utc)
     audit(session, "local-user", "suppression.deactivated", "suppression", s.id)
     session.flush()

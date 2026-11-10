@@ -34,7 +34,7 @@ export default function Findings() {
         title="Findings"
         subtitle="Redacted findings only: rule, severity, location and status. Secret values are never available."
         actions={
-          <button type="button" className="btn btn-ghost" onClick={() => setFilters(EMPTY)}>
+          <button type="button" className="btn btn-ghost" onClick={() => { setPage(1); setFilters(EMPTY); }}>
             Reset filters
           </button>
         }

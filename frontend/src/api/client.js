@@ -37,7 +37,7 @@ function query(params = {}) {
   return s ? `?${s}` : "";
 }
 
-export async function request(path, { method = "GET", body, signal } = {}) {
+export async function request(path, { method = "GET", body, signal, responseType = "json" } = {}) {
   const headers = { Accept: "application/json" };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (authToken) headers.Authorization = `Bearer ${authToken}`;
@@ -56,6 +56,7 @@ export async function request(path, { method = "GET", body, signal } = {}) {
     throw new ApiError("NETWORK_ERROR", "Cannot reach the SecretSentinel backend. Is `secretsentinel serve` running?", 0);
   }
   if (res.status === 204) return null;
+  if (res.ok && responseType === "blob") return res.blob();
   let data = null;
   try {
     data = await res.json();
@@ -87,6 +88,7 @@ export const api = {
   startScan: (body) => request("/scans", { method: "POST", body }),
   cancelScan: (id) => request(`/scans/${encodeURIComponent(id)}/cancel`, { method: "POST" }),
   scanFindings: (id, params) => request(`/scans/${encodeURIComponent(id)}/findings${query(params)}`),
+  exportScan: (id, format) => request(`/scans/${encodeURIComponent(id)}/export${query({ format })}`, { responseType: "blob" }),
 
   findings: (params) => request(`/findings${query(params)}`),
   finding: (id) => request(`/findings/${encodeURIComponent(id)}`),
