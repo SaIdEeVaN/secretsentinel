@@ -164,7 +164,7 @@ export default function NewScan() {
               {MODES.map((m) => (
                 <label
                   key={m.value}
-                  className={`card cursor-pointer p-3 text-sm ${mode === m.value ? "border-accent ring-1 ring-accent" : ""}`}
+                  className={`card cursor-pointer p-3 text-sm focus-within:outline-2 focus-within:outline-[var(--focus)] ${mode === m.value ? "border-accent ring-1 ring-accent" : ""}`}
                 >
                   <input type="radio" name="mode" value={m.value} checked={mode === m.value} onChange={() => setMode(m.value)} className="sr-only" />
                   <span className="font-semibold">

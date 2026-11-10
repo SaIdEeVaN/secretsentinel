@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Query, status
+from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -12,6 +15,8 @@ from ..core.security import canonicalize_existing_dir, ensure_within_allowed_roo
 from ..models import Finding, Repository, Scan
 from ..schemas import FindingOut, Page, ScanCreate, ScanCreated, ScanOut
 from ..services.jobs import ScanJobManager
+from ..services.exporters import to_csv, to_json, to_sarif
+from ..services.reports import stored_outcome
 from ..services.store import audit
 from .deps import Pagination, finding_out, get_db, get_jobs, get_or_404, get_settings, scan_out
 from .routes_findings import SEVERITY_RANK, apply_finding_filters
@@ -81,6 +86,35 @@ def list_scans(
 @router.get("/scans/{scan_id}", response_model=ScanOut)
 def get_scan(scan_id: str, session: Session = Depends(get_db)):
     return scan_out(session, get_or_404(session, Scan, scan_id))
+
+
+@router.get("/scans/{scan_id}/export")
+def export_scan(
+    scan_id: str,
+    format: Literal["json", "csv", "sarif"] = "json",
+    session: Session = Depends(get_db),
+):
+    scan = get_or_404(session, Scan, scan_id)
+    if scan.status != "completed":
+        raise SecretSentinelError(ErrorCode.INVALID_STATE, "Only completed scans can be exported.")
+    repo = get_or_404(session, Repository, scan.repository_id)
+    outcome = stored_outcome(session, scan)
+    # Review decisions can change finding flags after the original result was
+    # recorded. Require a rescan rather than mix historical policy with new counts.
+    if (outcome.total_findings, outcome.blocking_findings, outcome.suppressed_findings) != (
+        scan.total_findings, scan.blocking_findings, scan.suppressed_findings
+    ):
+        raise SecretSentinelError(ErrorCode.INVALID_STATE, "Review decisions changed this scan. Rescan before exporting.")
+    if format == "csv":
+        content, media_type = to_csv(outcome), "text/csv"
+    elif format == "sarif":
+        content, media_type = to_sarif(outcome, repo.display_name), "application/sarif+json"
+    else:
+        content, media_type = to_json(outcome, repo.display_name), "application/json"
+    return Response(content, media_type=media_type, headers={
+        "Content-Disposition": f'attachment; filename="secretsentinel-{scan.id}.{format}"',
+        "Cache-Control": "no-store",
+    })
 
 
 @router.post("/scans/{scan_id}/cancel", response_model=ScanOut)

@@ -1,10 +1,12 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import FindingDetail from "../pages/FindingDetail.jsx";
+import Findings from "../pages/Findings.jsx";
 import NewScan from "../pages/NewScan.jsx";
 import Overview from "../pages/Overview.jsx";
+import ScanDetail from "../pages/ScanDetail.jsx";
 import { STATUS, finding, mockApi, scan } from "./mockApi.js";
 
 const EMPTY_METRICS = {
@@ -85,5 +87,59 @@ describe("FindingDetail", () => {
     expect(screen.getByText("Create a NEW wallet")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /reveal|show secret|view secret/i })).not.toBeInTheDocument();
     expect(screen.getByText(/never stored, returned or displayed/)).toBeInTheDocument();
+  });
+});
+
+describe("Findings", () => {
+  it("resets pagination together with filters", async () => {
+    const { calls } = mockApi({
+      "GET /repositories": [], "GET /rules": { rules: [] },
+      "GET /findings": { items: [finding()], total: 60, page: 1, page_size: 25 },
+    });
+    renderAt("/findings", <Findings />);
+    await screen.findByText(/Page 1 of 3/);
+    await userEvent.selectOptions(screen.getByLabelText("Severity"), "high");
+    await userEvent.click(screen.getByRole("button", { name: /Next/ }));
+    await screen.findByText(/Page 2 of 3/);
+    await userEvent.click(screen.getByRole("button", { name: "Reset filters" }));
+    await screen.findByText(/Page 1 of 3/);
+    await waitFor(() => {
+      const params = new URL(calls.filter((c) => c.path.startsWith("/findings")).at(-1).path, "http://local").searchParams;
+      expect(params.get("page")).toBe("1");
+      expect(params.has("severity")).toBe(false);
+    });
+  });
+});
+
+describe("ScanDetail", () => {
+  it("refreshes findings when completion arrives after an empty poll", async () => {
+    let poll;
+    let scanRequests = 0;
+    let findingRequests = 0;
+    const realSetInterval = globalThis.setInterval;
+    vi.spyOn(globalThis, "setInterval").mockImplementation((callback, delay, ...args) => {
+      if (delay === 1500) { poll = callback; return 0; }
+      return realSetInterval(callback, delay, ...args);
+    });
+    mockApi({
+      "GET /scans/s1": () => scan({ id: "s1", status: ++scanRequests === 1 ? "running" : "completed" }),
+      "GET /scans/s1/findings": () => ({ items: ++findingRequests > 2 ? [finding()] : [], total: findingRequests > 2 ? 1 : 0, page: 1, page_size: 50 }),
+    });
+    renderAt("/scans/s1", <ScanDetail />, "/scans/:scanId");
+    await screen.findByText("No findings recorded.");
+    await waitFor(() => expect(poll).toBeTypeOf("function"));
+    await act(async () => { poll(); });
+    expect((await screen.findAllByText("Potential EVM signing secret")).length).toBeGreaterThan(0);
+  });
+
+  it("shows a cancellation failure instead of swallowing it", async () => {
+    mockApi({
+      "GET /scans/s1": scan({ id: "s1", status: "running" }),
+      "GET /scans/s1/findings": { items: [], total: 0, page: 1, page_size: 50 },
+      "POST /scans/s1/cancel": { __status: 409, body: { error: { code: "INVALID_STATE", message: "Scan already finished" } } },
+    });
+    renderAt("/scans/s1", <ScanDetail />, "/scans/:scanId");
+    await userEvent.click(await screen.findByRole("button", { name: "Cancel", exact: true }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Scan already finished");
   });
 });

@@ -12,7 +12,9 @@ export function resultOf(scan) {
   if (scan.status === "queued" || scan.status === "running") return scan.status;
   if (scan.status === "cancelled") return "cancelled";
   if (scan.status !== "completed") return "error";
-  return scan.policy_result === "fail" ? "fail" : "pass";
+  if (scan.policy_result === "fail") return "fail";
+  if (scan.policy_result === "pass") return "pass";
+  return "error";
 }
 
 const PILL = {

@@ -5,13 +5,14 @@ import { ResultPill } from "../components/ScanStatus.jsx";
 import { EmptyState, ErrorState, Loading } from "../components/States.jsx";
 import { Field, PageHeader, Pagination } from "../components/Widgets.jsx";
 import { MODE_LABEL, formatDate, formatDuration } from "../components/format.js";
-import { useAsync } from "../hooks/useAsync.js";
+import { useAsync, usePolling } from "../hooks/useAsync.js";
 
 export default function Scans() {
   const navigate = useNavigate();
   const [filters, setFilters] = useState({ status: "", mode: "", policy_result: "" });
   const [page, setPage] = useState(1);
   const list = useAsync(() => api.scans({ ...filters, page, page_size: 20 }), [filters, page]);
+  usePolling(list.reload, 1500, Boolean(list.data?.items.some((s) => s.status === "queued" || s.status === "running")));
   const set = (k) => (e) => {
     setPage(1);
     setFilters((f) => ({ ...f, [k]: e.target.value }));

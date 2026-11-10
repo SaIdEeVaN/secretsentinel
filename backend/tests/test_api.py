@@ -232,6 +232,72 @@ def test_delete_repository_cascades(client, root, fake_gitleaks):
     assert client.get("/api/v1/findings", params={"latest_only": False}).json()["total"] == 0
 
 
+@pytest.mark.parametrize("format", ["json", "csv", "sarif"])
+def test_export_contains_only_sanitized_findings(client, root, fake_gitleaks, format):
+    fake_gitleaks.records([raw_record(HEX64, File="=SUM(1).env")])
+    repo_id = _register(client, root)
+    scan = _wait(client, client.post("/api/v1/scans", json={"repository_id": repo_id, "mode": "dir"}).json()["scan_id"])
+    response = client.get(f"/api/v1/scans/{scan['id']}/export", params={"format": format})
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert f"secretsentinel-{scan['id']}.{format}" in response.headers["content-disposition"]
+    assert HEX64 not in response.text and str(root) not in response.text
+    assert '"Secret"' not in response.text and '"Match"' not in response.text
+    if format == "json":
+        report = response.json()
+        assert report["schema"] == "secretsentinel-report/v1"
+        assert report["scan"]["policy_result"] == "fail"
+        assert report["scan"]["total_findings"] == len(report["findings"]) == 1
+        assert report["findings"][0]["blocking"]
+    elif format == "sarif":
+        assert response.json()["version"] == "2.1.0"
+        assert len(response.json()["runs"][0]["results"]) == 1
+    else:
+        assert "'=SUM(1).env" in response.text  # spreadsheet formula is neutralized
+
+
+def test_export_includes_findings_beyond_api_page_size(client, root, fake_gitleaks):
+    fake_gitleaks.records([raw_record(HEX64, File=f"f{i}.env") for i in range(205)])
+    repo_id = _register(client, root)
+    scan = _wait(client, client.post("/api/v1/scans", json={"repository_id": repo_id, "mode": "dir"}).json()["scan_id"])
+    report = client.get(f"/api/v1/scans/{scan['id']}/export").json()
+    assert len(report["findings"]) == report["scan"]["total_findings"] == 205
+
+
+def test_export_rejects_failed_and_active_scans(client, root, fake_gitleaks):
+    repo_id = _register(client, root)
+    fake_gitleaks.scenario("crash")
+    scan = _wait(client, client.post("/api/v1/scans", json={"repository_id": repo_id, "mode": "dir"}).json()["scan_id"])
+    assert client.get(f"/api/v1/scans/{scan['id']}/export").status_code == 409
+    assert client.get(f"/api/v1/scans/{scan['id']}/export?format=raw").status_code == 422
+    assert client.get("/api/v1/scans/missing/export").status_code == 404
+    fake_gitleaks.scenario("timeout")
+    sid = client.post("/api/v1/scans", json={"repository_id": repo_id, "mode": "dir"}).json()["scan_id"]
+    assert client.get(f"/api/v1/scans/{sid}/export").status_code == 409
+    client.post(f"/api/v1/scans/{sid}/cancel")
+    assert _wait(client, sid)["status"] == "cancelled"
+
+
+@pytest.mark.parametrize("threshold,blocking", [("high", True), ("none", False)])
+def test_deactivating_suppression_restores_blocking_decision(client, root, fake_gitleaks, threshold, blocking):
+    fake_gitleaks.records([raw_record(HEX64)])
+    repo_id = _register(client, root)
+    scan = _wait(client, client.post("/api/v1/scans", json={"repository_id": repo_id, "mode": "dir", "fail_on": threshold}).json()["scan_id"])
+    finding = client.get(f"/api/v1/scans/{scan['id']}/findings").json()["items"][0]
+    suppression = client.post("/api/v1/suppressions", json={
+        "finding_id": finding["id"], "reason": "Reviewed synthetic test fixture", "reviewer": "reviewer",
+        "expires_at": (date.today() + timedelta(days=30)).isoformat(),
+    })
+    assert suppression.status_code == 201
+    assert client.get(f"/api/v1/scans/{scan['id']}/export").status_code == 409
+    assert client.delete(f"/api/v1/suppressions/{suppression.json()['id']}").status_code == 200
+    updated = client.get(f"/api/v1/findings/{finding['id']}").json()
+    assert updated["status"] == "open" and updated["blocking"] is blocking
+    assert updated["suppression_id"] is None
+    report = client.get(f"/api/v1/scans/{scan['id']}/export").json()
+    assert report["findings"][0]["blocking"] is blocking
+
+
 def test_ingest_requires_token_and_strict_schema(make_client):
     report = {
         "schema": "secretsentinel-report/v1",

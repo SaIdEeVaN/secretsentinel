@@ -3,7 +3,7 @@ name: Backend tests
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, "codex/**"]
   workflow_dispatch:
 
 permissions:
@@ -59,6 +59,7 @@ jobs:
       - name: Detector self-test
         run: python scripts/check_no_raw_secrets.py --self-test
       - name: Gate self-test
+        shell: bash
         env:
           GITLEAKS_PATH: ${{ runner.temp }}/bin/gitleaks
         run: bash scripts/ci_gate_selftest.sh 2>&1 | tee "$RUNNER_TEMP/gate-selftest.log"
