@@ -128,7 +128,19 @@ export function Field({ label, htmlFor, hint, children }) {
   );
 }
 
-export function KeyValue({ items }) {
+export function KeyValue({ items, rows = false }) {
+  if (rows) {
+    return (
+      <dl className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-[12.5px]">
+        {items.map(([k, v]) => (
+          <div key={k} className="contents">
+            <dt className="text-faint">{k}</dt>
+            <dd className="min-w-0 break-words">{v ?? "—"}</dd>
+          </div>
+        ))}
+      </dl>
+    );
+  }
   return (
     <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
       {items.map(([k, v]) => (

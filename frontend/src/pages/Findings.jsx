@@ -24,7 +24,7 @@ export default function Findings() {
   };
 
   const select = (f) => {
-    if (window.matchMedia && !window.matchMedia("(min-width: 1280px)").matches) navigate(`/findings/${f.id}`);
+    if (window.matchMedia && !window.matchMedia("(min-width: 1000px)").matches) navigate(`/findings/${f.id}`);
     else setSelected(f.id);
   };
 
@@ -101,7 +101,7 @@ export default function Findings() {
         </Field>
       </form>
 
-      <div className={`grid gap-5 ${selected ? "xl:grid-cols-[1.25fr_1fr]" : ""}`}>
+      <div className={`grid gap-5 ${selected ? "min-[1000px]:grid-cols-[minmax(0,1fr)_430px]" : ""}`}>
         <div className="min-w-0">
           {list.loading && !list.data && <Loading />}
           <ErrorState error={list.error} onRetry={list.reload} />
@@ -118,13 +118,11 @@ export default function Findings() {
           )}
         </div>
         {selected && (
-          <aside className="hidden xl:block" aria-label="Finding details">
-            <div className="mb-2 flex justify-end">
-              <button type="button" className="btn btn-ghost text-xs" onClick={() => setSelected(null)}>
-                Close ✕
-              </button>
-            </div>
-            <FindingDetailPanel key={selected} findingId={selected} compact onChanged={list.reload} />
+          <aside
+            className="hidden self-start min-[1000px]:sticky min-[1000px]:top-4 min-[1000px]:block min-[1000px]:max-h-[calc(100vh-2rem)] min-[1000px]:overflow-y-auto"
+            aria-label="Finding details"
+          >
+            <FindingDetailPanel key={selected} findingId={selected} compact onChanged={list.reload} onClose={() => setSelected(null)} />
           </aside>
         )}
       </div>
