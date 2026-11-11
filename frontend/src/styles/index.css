@@ -89,6 +89,11 @@
   --warn-bg: #fef3c7;
 }
 
+/* One responsive breakpoint for the whole app (design source: 760px). */
+@theme {
+  --breakpoint-lg: 760px;
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-sidebar: var(--sidebar);

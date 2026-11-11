@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client.js";
 import FindingTable from "../components/FindingTable.jsx";
-import { ResultPill } from "../components/ScanStatus.jsx";
+import { CLEAN_TEXT, FAILED_TEXT, ResultPill, resultOf } from "../components/ScanStatus.jsx";
 import { EmptyState, ErrorState, Loading } from "../components/States.jsx";
 import { PageHeader, SeverityBars, StatCard, TrendChart } from "../components/Widgets.jsx";
 import { MODE_LABEL, timeAgo } from "../components/format.js";
@@ -78,6 +78,29 @@ function Onboarding({ status, onDemo, demoBusy, demoError }) {
   );
 }
 
+function LatestResult({ scan }) {
+  const r = resultOf(scan);
+  let text;
+  if (r === "pass") text = scan.total_findings === 0 ? CLEAN_TEXT : `No blocking findings at or above “${scan.fail_on}”.`;
+  else if (r === "fail") text = `${scan.blocking_findings} blocking finding(s) at or above “${scan.fail_on}”.`;
+  else text = FAILED_TEXT;
+  const border = r === "pass" ? "border-ok/50" : r === "fail" ? "border-critical/60" : "border-warn/60";
+  return (
+    <section
+      aria-label="Latest scan result"
+      className={`card flex flex-wrap items-center gap-3 border p-3 ${border}`}
+    >
+      <ResultPill scan={scan} />
+      <p className="min-w-0 flex-1 text-sm">
+        <span className="font-semibold">{scan.repository_name}</span>: {text}
+      </p>
+      <Link to={`/scans/${scan.id}`} className="btn btn-ghost">
+        View scan
+      </Link>
+    </section>
+  );
+}
+
 export default function Overview() {
   const navigate = useNavigate();
   const { status: system } = useSystem();
@@ -125,7 +148,8 @@ export default function Overview() {
         ))}
       {m && m.scans_total > 0 && (
         <div className="space-y-5">
-          <section aria-label="Summary" className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          {m.latest_scans[0] && <LatestResult scan={m.latest_scans[0]} />}
+          <section aria-label="Summary" className="grid grid-cols-2 gap-3 min-[1000px]:grid-cols-5">
             <StatCard label="Repositories" value={m.repositories} />
             <StatCard label="Completed scans" value={m.scans_completed} />
             <StatCard label="Open findings" value={m.open_findings} tone={m.open_findings ? "warn" : "ok"} />
