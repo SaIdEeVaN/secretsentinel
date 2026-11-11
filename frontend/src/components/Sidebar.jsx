@@ -52,10 +52,16 @@ export default function Sidebar({ blockchainEnabled, localScanning = true, onSig
       </header>
       <aside
         id="primary-nav"
-        className={`${open ? "block" : "hidden"} lg:block lg:sticky lg:top-0 lg:h-screen w-full lg:w-60 shrink-0 border-b lg:border-b-0 lg:border-r border-line bg-surface p-3`}
+        className={`${open ? "block" : "hidden"} lg:block lg:sticky lg:top-0 lg:h-screen w-full lg:w-60 shrink-0 border-b lg:border-b-0 lg:border-r border-line bg-sidebar p-3`}
       >
         <div className="hidden lg:block py-3">
           <Logo />
+          {!localScanning && (
+            <p className="mt-3 flex items-center gap-2 px-2 text-xs text-muted" data-testid="hosted-status">
+              <span className="size-1.5 rounded-full bg-accent" aria-hidden="true" />
+              Hosted · results from GitHub Actions
+            </p>
+          )}
         </div>
         <nav aria-label="Primary" className="mt-2">
           <ul className="space-y-1">

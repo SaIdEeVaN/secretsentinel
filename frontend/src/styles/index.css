@@ -7,34 +7,37 @@
  */
 :root {
   color-scheme: dark;
-  --bg: #0b1016;
-  --surface: #121a23;
-  --surface-2: #18222e;
-  --border: #243241;
-  --text: #e6edf3;
-  --muted: #93a4b5;
-  --accent: #2dd4bf;
-  --accent-strong: #14b8a6;
-  --accent-ink: #042f2e;
-  --focus: #5eead4;
-  --critical: #f87171;
-  --critical-bg: #3b1218;
-  --high: #fb923c;
-  --high-bg: #3a1d0c;
-  --medium: #facc15;
-  --medium-bg: #332a07;
-  --low: #93c5fd;
-  --low-bg: #10223b;
-  --ok: #4ade80;
-  --ok-bg: #0d2a19;
-  --warn: #fbbf24;
-  --warn-bg: #33250a;
+  --bg: #111418;
+  --sidebar: #0c0f12;
+  --surface: #171b20;
+  --surface-2: #1f252c;
+  --border: #222830;
+  --text: #e8ebef;
+  --muted: #a3abb6;
+  --faint: #7c8592;
+  --accent: oklch(0.8 0.13 165);
+  --accent-strong: oklch(0.74 0.13 165);
+  --accent-ink: #0c0f12;
+  --focus: oklch(0.76 0.11 250);
+  --critical: oklch(0.72 0.16 25);
+  --critical-bg: oklch(0.24 0.06 25);
+  --high: oklch(0.78 0.14 60);
+  --high-bg: oklch(0.25 0.05 60);
+  --medium: oklch(0.86 0.12 95);
+  --medium-bg: oklch(0.27 0.05 95);
+  --low: oklch(0.76 0.11 250);
+  --low-bg: oklch(0.24 0.05 250);
+  --ok: oklch(0.8 0.13 165);
+  --ok-bg: oklch(0.25 0.05 165);
+  --warn: oklch(0.78 0.14 60);
+  --warn-bg: oklch(0.25 0.05 60);
 }
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
     color-scheme: light;
     --bg: #f5f7fa;
+    --sidebar: #eef2f6;
     --surface: #ffffff;
     --surface-2: #eef2f6;
     --border: #d5dde6;
@@ -62,6 +65,7 @@
 :root[data-theme="light"] {
   color-scheme: light;
   --bg: #f5f7fa;
+  --sidebar: #eef2f6;
   --surface: #ffffff;
   --surface-2: #eef2f6;
   --border: #d5dde6;
@@ -87,6 +91,8 @@
 
 @theme inline {
   --color-bg: var(--bg);
+  --color-sidebar: var(--sidebar);
+  --color-faint: var(--faint);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-line: var(--border);
@@ -107,8 +113,8 @@
   --color-ok-bg: var(--ok-bg);
   --color-warn: var(--warn);
   --color-warn-bg: var(--warn-bg);
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+  --font-sans: Geist, "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
 }
 
 html,
