@@ -1,0 +1,27 @@
+# Repositories scanned by .github/workflows/dashboard-fleet.yml and shown on
+# the hosted dashboard. One "owner/name" per line; "#" starts a comment.
+# To add a repository, add a line and push to main. See docs/HOSTING.md.
+#
+# Public repositories need nothing else. Private ones also need the
+# SECRETSENTINEL_REPO_READ_TOKEN secret (a read-only token), so they are
+# commented out until that secret exists.
+
+SaIdEeVaN/FOAI-Project
+SaIdEeVaN/voicepath
+SaIdEeVaN/SaIdEeVaN
+SaIdEeVaN/portfolio
+SaIdEeVaN/FOAI-Repo
+SaIdEeVaN/blog-platform
+SaIdEeVaN/task-manager
+SaIdEeVaN/ecommerce-store
+SaIdEeVaN/PUC_Project
+SaIdEeVaN/osprep
+SaIdEeVaN/Network-Security-Lab-Record
+SaIdEeVaN/Computer-Networks-Record-
+SaIdEeVaN/OOPS-Using-Java-Record
+SaIdEeVaN/Cryptography-Lab-Record
+SaIdEeVaN/Data-Structures-Record-
+SaIdEeVaN/PUC
+
+# Private (needs SECRETSENTINEL_REPO_READ_TOKEN):
+# SaIdEeVaN/BIC-REC_Site

@@ -78,7 +78,32 @@ Render dashboard → `secretsentinel-dashboard` → **Environment** → reveal
 `API_TOKEN`. Open the service URL and paste it. The token stays in that browser
 tab only and is cleared when the tab closes.
 
-## 3. Connect a repository
+## 3. Connect repositories
+
+### Option A: central list (recommended)
+
+This repository can scan a whole list of repositories for you, so the other
+repositories need no files or settings of their own:
+
+1. Do the one-time setup below (environment, secret, variable) in **this**
+   repository only.
+2. Add `owner/name` lines to [`.github/dashboard-repos.txt`](../.github/dashboard-repos.txt)
+   and push to `main`.
+
+`dashboard-fleet.yml` then scans every listed repository (working tree and
+full history) on that push, every Monday, and whenever you run **Actions →
+Scan repository list for SecretSentinel dashboard → Run workflow**. Each
+repository is its own job, so one failing repository doesn't stop the others.
+The scanner only reads the listed repositories; it never runs their code. A
+`.secretsentinel.yml` in a listed repository is used as its policy.
+
+**Private repositories** also need a token that can read them: create a
+fine-grained personal access token (GitHub → Settings → Developer settings)
+limited to those repositories with *Contents: Read-only*, and save it in this
+repository as the Actions secret `SECRETSENTINEL_REPO_READ_TOKEN`. Public
+repositories don't need it.
+
+### Option B: a workflow in each repository
 
 This repository already contains everything. For **another** repository, copy:
 
@@ -134,6 +159,7 @@ password; the old one stops working immediately, so do both steps together.
 | Symptom | Fix |
 |---|---|
 | Upload fails with `401 UNAUTHORIZED` | `SECRETSENTINEL_INGEST_TOKEN` doesn't match Render's `INGEST_TOKEN`. |
+| A repository's job fails at checkout with `Repository not found` | It is private (or misspelled): set `SECRETSENTINEL_REPO_READ_TOKEN` or fix the line in `dashboard-repos.txt`. |
 | Upload fails with `404` | `INGEST_TOKEN` is not set on the service. |
 | Upload gives up after retries | The service may be suspended or failing; check its Render logs. |
 | Dashboard says the token was not accepted | Copy `API_TOKEN` again (not `INGEST_TOKEN`). |

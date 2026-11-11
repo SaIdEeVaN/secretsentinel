@@ -1,0 +1,131 @@
+name: Scan repository list for SecretSentinel dashboard
+
+# Central scanner: checks out every repository listed in
+# .github/dashboard-repos.txt, scans it (working tree + full history) and
+# uploads only the SANITIZED report (rule IDs, locations, counts - never secret
+# values) to the hosted dashboard. See docs/HOSTING.md.
+#
+# The listed repositories need no files or settings of their own. Their code is
+# only read by the scanner; nothing from them is executed.
+#
+# Trust model: runs ONLY from main (push that changes the list, weekly
+# schedule, manual run) - never for pull requests - and the upload token lives
+# in the "secretsentinel-dashboard" environment, restricted to main.
+#
+# Settings (this repository):
+#   variable  SECRETSENTINEL_DASHBOARD_URL     dashboard base URL
+#   secret    SECRETSENTINEL_INGEST_TOKEN      in the environment above
+#   secret    SECRETSENTINEL_REPO_READ_TOKEN   optional; read-only token, only
+#                                              needed to scan PRIVATE repositories
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/dashboard-repos.txt
+      - .github/workflows/dashboard-fleet.yml
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dashboard-fleet
+  cancel-in-progress: false
+
+env:
+  GITLEAKS_VERSION: "8.30.1"
+  GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+
+jobs:
+  list:
+    name: read repository list
+    if: ${{ vars.SECRETSENTINEL_DASHBOARD_URL != '' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      repos: ${{ steps.matrix.outputs.repos }}
+      count: ${{ steps.matrix.outputs.count }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: matrix
+        run: |
+          repos="$(python3 scripts/fleet_matrix.py .github/dashboard-repos.txt)"
+          echo "repos=$repos" >> "$GITHUB_OUTPUT"
+          echo "count=$(python3 -c 'import json,sys; print(len(json.loads(sys.argv[1])))' "$repos")" >> "$GITHUB_OUTPUT"
+
+  scan:
+    name: ${{ matrix.repo }}
+    needs: list
+    if: ${{ needs.list.outputs.count != '0' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: secretsentinel-dashboard
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        repo: ${{ fromJSON(needs.list.outputs.repos) }}
+    steps:
+      - name: Checkout scanner
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: scanner
+          persist-credentials: false
+
+      - name: Checkout ${{ matrix.repo }} (full history)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ matrix.repo }}
+          path: target
+          fetch-depth: 0
+          persist-credentials: false
+          token: ${{ secrets.SECRETSENTINEL_REPO_READ_TOKEN || github.token }}
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install pinned Gitleaks (checksum verified)
+        run: bash scanner/scripts/install_gitleaks.sh "$GITLEAKS_VERSION" "$GITLEAKS_SHA256" "$RUNNER_TEMP/bin"
+
+      - name: Install scanner dependency (hash-pinned)
+        run: python -m pip install --disable-pip-version-check --require-hashes --no-deps -r scanner/backend/requirements-ci.txt
+
+      - name: Scan
+        id: scan
+        env:
+          GITLEAKS_PATH: ${{ runner.temp }}/bin/gitleaks
+          SCANNER_TIMEOUT_SECONDS: "600"
+        run: |
+          set +e
+          export PYTHONPATH="$GITHUB_WORKSPACE/scanner/backend"
+          export SECRETSENTINEL_RULES_DIR="$GITHUB_WORKSPACE/scanner/rules"
+          report="$RUNNER_TEMP/secretsentinel-report.json"
+          target="$GITHUB_WORKSPACE/target"
+          args=(check "$target" --mode both --no-size-limit --format json --output "$report")
+          if [[ -f "$target/.secretsentinel.yml" ]]; then args+=(--policy "$target/.secretsentinel.yml"); else args+=(--no-policy); fi
+          python -m secretsentinel "${args[@]}"
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          # 0 = pass, 1 = blocking findings: both are results worth uploading.
+          [[ -f "$report" ]] || { echo "::error::Scan produced no report (exit $code)."; exit 1; }
+
+      - name: Upload sanitized report
+        env:
+          SECRETSENTINEL_DASHBOARD_URL: ${{ vars.SECRETSENTINEL_DASHBOARD_URL }}
+          SECRETSENTINEL_INGEST_TOKEN: ${{ secrets.SECRETSENTINEL_INGEST_TOKEN }}
+          TARGET_REPOSITORY: ${{ matrix.repo }}
+        run: python scanner/scripts/upload_report.py "$RUNNER_TEMP/secretsentinel-report.json" --repository "$TARGET_REPOSITORY"
+
+      - name: Flag incomplete scans
+        if: ${{ steps.scan.outputs.exit_code == '2' || steps.scan.outputs.exit_code == '3' }}
+        env:
+          EXIT_CODE: ${{ steps.scan.outputs.exit_code }}
+        run: |
+          echo "::error::The scan did not complete (exit $EXIT_CODE); it was uploaded with status failed."
+          exit 1
