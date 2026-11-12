@@ -103,6 +103,12 @@ limited to those repositories with *Contents: Read-only*, and save it in this
 repository as the Actions secret `SECRETSENTINEL_REPO_READ_TOKEN`. Public
 repositories don't need it.
 
+Fine-grained tokens expire. The workflow's **read token expiry** job checks the
+expiry date GitHub reports for this token: it adds a warning 14 days before,
+and fails (so GitHub emails you about the failed run) 7 days before or once
+GitHub rejects the token. The scans still run either way. To renew, create a
+new token with the same settings and update the secret.
+
 ### Option B: a workflow in each repository
 
 This repository already contains everything. For **another** repository, copy:

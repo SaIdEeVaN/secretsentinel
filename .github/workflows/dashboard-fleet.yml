@@ -16,7 +16,9 @@ name: Scan repository list for SecretSentinel dashboard
 #   variable  SECRETSENTINEL_DASHBOARD_URL     dashboard base URL
 #   secret    SECRETSENTINEL_INGEST_TOKEN      in the environment above
 #   secret    SECRETSENTINEL_REPO_READ_TOKEN   optional; read-only token, only
-#                                              needed to scan PRIVATE repositories
+#                                              needed to scan PRIVATE repositories.
+#                                              The token-expiry job warns 14 days and
+#                                              fails 7 days before it expires.
 
 on:
   push:
@@ -57,6 +59,22 @@ jobs:
           repos="$(python3 scripts/fleet_matrix.py .github/dashboard-repos.txt)"
           echo "repos=$repos" >> "$GITHUB_OUTPUT"
           echo "count=$(python3 -c 'import json,sys; print(len(json.loads(sys.argv[1])))' "$repos")" >> "$GITHUB_OUTPUT"
+
+  token-expiry:
+    name: read token expiry
+    # Its own job: when the token is close to expiry (or rejected) this job fails, so GitHub
+    # emails the failed run - but the scans below still run. Logs show only the date.
+    if: ${{ vars.SECRETSENTINEL_DASHBOARD_URL != '' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check SECRETSENTINEL_REPO_READ_TOKEN expiry
+        env:
+          TOKEN: ${{ secrets.SECRETSENTINEL_REPO_READ_TOKEN }}
+        run: python3 scripts/token_expiry.py --warn-days 14 --fail-days 7
 
   scan:
     name: ${{ matrix.repo }}
