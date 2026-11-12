@@ -6,6 +6,7 @@ const LINKS = [
   { to: "/scan/new", label: "New Scan", icon: "＋" },
   { to: "/findings", label: "Findings", icon: "⚑" },
   { to: "/scans", label: "Scan History", icon: "☰" },
+  { to: "/ci", label: "CI Checks", icon: "⟳" },
   { to: "/rules", label: "Rules & Policy", icon: "§" },
   { to: "/settings", label: "Settings", icon: "⚙" },
 ];
@@ -27,7 +28,8 @@ function Logo() {
 
 export default function Sidebar({ blockchainEnabled, localScanning = true, onSignOut, theme, onToggleTheme }) {
   const [open, setOpen] = useState(false);
-  let links = blockchainEnabled ? [...LINKS.slice(0, 5), { to: "/attestations", label: "Attestations", icon: "⛓" }, LINKS[5]] : LINKS;
+  // Attestations sits just before Settings, which is always last.
+  let links = blockchainEnabled ? [...LINKS.slice(0, -1), { to: "/attestations", label: "Attestations", icon: "⛓" }, LINKS.at(-1)] : LINKS;
   // Hosted dashboards receive results from CI and cannot scan local folders.
   if (!localScanning) links = links.filter((l) => l.to !== "/scan/new");
   const linkCls = ({ isActive }) =>

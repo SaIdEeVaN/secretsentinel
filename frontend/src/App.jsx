@@ -5,6 +5,7 @@ import Sidebar from "./components/Sidebar.jsx";
 import { EmptyState, Loading } from "./components/States.jsx";
 import { SystemContext } from "./context/system.js";
 import Attestations from "./pages/Attestations.jsx";
+import CiChecks from "./pages/CiChecks.jsx";
 import FindingDetail from "./pages/FindingDetail.jsx";
 import Findings from "./pages/Findings.jsx";
 import NewScan from "./pages/NewScan.jsx";
@@ -105,6 +106,7 @@ export default function App() {
               <Route path="/scan/new" element={<NewScan />} />
               <Route path="/scans" element={<Scans />} />
               <Route path="/scans/:scanId" element={<ScanDetail blockchainEnabled={blockchain} />} />
+              <Route path="/ci" element={<CiChecks />} />
               <Route path="/findings" element={<Findings />} />
               <Route path="/findings/:findingId" element={<FindingDetail />} />
               <Route path="/rules" element={<Rules />} />
