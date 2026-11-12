@@ -43,12 +43,13 @@ invalid request values are not echoed.
 | POST | `/scans/{id}/cancel` | Request cancellation |
 | GET | `/scans/{id}/findings` | Paginated scan-specific findings |
 | GET | `/scans/{id}/export?format=json` | Download all sanitized findings; JSON/CSV/SARIF |
-| GET | `/findings`, `/findings/{id}` | Filter findings/detail with remediation |
+| GET | `/findings`, `/findings/{id}` | Filter findings/detail with remediation and, when suppressed, the suppression's reason, reviewer and expiry |
+| GET | `/findings/facets` | Counts by severity and by status for the same filters as `/findings` (each dimension ignores its own filter) |
 | PATCH | `/findings/{id}` | Audited open/acknowledged/resolved triage |
 | GET/POST | `/suppressions` | List/create reviewed, expiring suppressions |
 | DELETE | `/suppressions/{id}` | End a reviewed suppression |
-| GET | `/rules`, `/metrics/overview`, `/audit-events` | Policy information, metrics, audit |
-| POST | `/ingest/scan-summary` | P1: authenticated ingestion of a sanitized CLI JSON report (`INGEST_TOKEN`; disabled by default) |
+| GET | `/rules`, `/metrics/overview`, `/audit-events` | Policy information, metrics, audit (`?entity_id=` for one finding's trail) |
+| POST | `/ingest/scan-summary` | P1: authenticated ingestion of a sanitized CLI JSON report (`INGEST_TOKEN`; disabled by default); returns `new_findings` / `new_blocking_findings` for alerts |
 | GET/POST | `/attestations/{scan_id}` | P2: view/create a signed attestation (`ENABLE_BLOCKCHAIN=true` only) |
 | POST | `/attestations/verify` | P2: verify a bundle (digest, signature, trusted signer, chain, optional registry) |
 

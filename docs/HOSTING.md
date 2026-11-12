@@ -78,6 +78,44 @@ Render dashboard → `secretsentinel-dashboard` → **Environment** → reveal
 `API_TOKEN`. Open the service URL and paste it. The token stays in that browser
 tab only and is cleared when the tab closes.
 
+## Using the dashboard
+
+- **Overview** opens with one line for all repositories (for example "1 of 23
+  repositories have blocking findings in their latest scan") and links to the
+  ones that need attention, then counts, severity, recent scans and findings.
+- **Findings**: severity and status chips show how many findings each choice
+  would return. Tick findings (or "select all" on the page) to mark them Open,
+  Acknowledged or Resolved together; each change is recorded in the audit
+  trail. On wide screens a finding opens in a side panel with its location,
+  triage control, recommended response, audit trail and, if suppressed, the
+  suppression's reason, reviewer and expiry.
+- **Scan History** lists every run with result chips and repository, mode and
+  status filters. **CI Checks** shows each repository's latest uploads from
+  GitHub Actions with a sanitized log made from stored metadata only.
+- **Rules & Policy** shows which severities block, warn or only inform under
+  the current threshold, the mapped rules, and dashboard suppressions.
+- **Settings** groups the server status (scanner, scanning mode, access,
+  attestations) and lists repositories, which you can remove.
+
+### Exceptions for repositories scanned by GitHub Actions
+
+Put reviewed exceptions in **that repository's** `.secretsentinel.yml`; the
+scan reads it on every run. A suppression created on the dashboard only marks
+the finding until the repository's next upload, because each upload carries
+the CI result. Example (each entry needs a rule, a path, a reason, a reviewer
+and an expiry within a year):
+
+```yaml
+version: 1
+suppressions:
+  - id: EX-001
+    rule_id: mapbox-api-token
+    path: examples/app/settings.env
+    reason: Public (pk.) token that the example ships to the browser by design.
+    reviewer: your-name
+    expires: 2027-05-12
+```
+
 ## 3. Connect repositories
 
 ### Option A: central list (recommended)

@@ -8,8 +8,13 @@ Built from the [product requirements](docs/PRD.md). The core workflow includes:
 
 - Gitleaks default rules plus contextual Web3 signing-key, mnemonic and RPC rules.
 - Directory, Git history and combined scans, with distinct error/cancelled states.
-- A FastAPI/SQLite backend and React dashboard with history, filters, triage,
-  remediation, reviewed suppressions, and JSON/CSV/SARIF downloads.
+- A FastAPI/SQLite backend and React dashboard with history, filters with
+  counts, single and bulk triage, remediation, reviewed suppressions, an audit
+  trail, and JSON/CSV/SARIF downloads.
+- An optional hosted dashboard (Render + Postgres) fed by GitHub Actions: one
+  workflow scans a list of repositories, uploads only sanitized reports, and
+  fails (so GitHub emails you) when a repository gets a new blocking finding.
+- A pre-commit hook (`secretsentinel hook install`) that scans staged changes.
 - A CLI, reviewed baselines and a fail-closed GitHub Actions security check.
 - Synthetic demo repositories and automated security, API, UI and browser tests.
 
