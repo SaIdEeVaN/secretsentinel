@@ -1,0 +1,67 @@
+# Dependabot version updates: one weekly PR per ecosystem for minor/patch
+# updates (majors get their own PR). New releases wait 7 days before being
+# proposed (cooldown), so a hijacked release has time to be caught and pulled.
+# Every PR runs the normal test and secret-scan workflows; review and merge
+# them like any other change. Pinned action SHAs are updated with their
+# version comment.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: tuesday
+      time: "05:17"
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(actions)"
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: tuesday
+      time: "05:17"
+    cooldown:
+      default-days: 7
+    groups:
+      frontend:
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(frontend)"
+
+  # pyproject.toml ranges and the hash-pinned requirements-ci.txt used by the CI gate.
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: tuesday
+      time: "05:17"
+    cooldown:
+      default-days: 7
+    groups:
+      backend:
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(backend)"
+
+  # Optional P2 tooling (Hardhat); checked less often.
+  - package-ecosystem: npm
+    directory: /contracts
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      contracts:
+        update-types: [minor, patch]
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps(contracts)"

@@ -195,6 +195,11 @@ interpreter; the browser runner otherwise uses `.venv`, then `python`.
 - [Synthetic demonstration](docs/DEMO.md)
 - [Local validation results and remaining external checks](docs/VALIDATION.md)
 
+Dependabot (`.github/dependabot.yml`) opens one weekly pull request per
+ecosystem - pinned GitHub Actions, frontend npm, backend pip - for minor and
+patch updates, waiting 7 days after each release first. Review and merge them
+like any other change; the usual tests and the secret scan run on each.
+
 CI runs on pull requests and pushes to `main`. A maintainer must configure the
 required status check in GitHub settings to block merges; the workflow alone
 cannot enforce branch protection. The security job scans all pull requests.
