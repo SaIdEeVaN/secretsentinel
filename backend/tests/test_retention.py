@@ -1,5 +1,6 @@
 """Scan history retention never removes current state or signed evidence."""
 
+import os
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -13,8 +14,20 @@ NOW = datetime.now(timezone.utc)
 
 @pytest.fixture
 def db(tmp_path):
+    # Set SECRETSENTINEL_TEST_DATABASE_URL to run against Postgres (the hosted database);
+    # the schema is dropped first so every test starts empty.
+    url = os.environ.get("SECRETSENTINEL_TEST_DATABASE_URL")
     reset_engine()
-    init_engine(f"sqlite:///{(tmp_path / 'retention.db').as_posix()}")
+    if url:
+        from sqlalchemy import create_engine
+
+        from secretsentinel.database import normalize_db_url
+        from secretsentinel.models import Base
+
+        engine = create_engine(normalize_db_url(url))
+        Base.metadata.drop_all(engine)
+        engine.dispose()
+    init_engine(url or f"sqlite:///{(tmp_path / 'retention.db').as_posix()}")
     yield
     reset_engine()
 
