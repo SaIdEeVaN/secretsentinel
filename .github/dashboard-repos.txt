@@ -33,6 +33,3 @@ SaIdEeVaN/Data-Structure-using-C-Notes
 
 # Private (needs SECRETSENTINEL_REPO_READ_TOKEN):
 SaIdEeVaN/BIC-REC_Site
-
-# Temporary: end-to-end test of the new-blocking-finding alert (remove after the test).
-SaIdEeVaN/secretsentinel-alert-test
