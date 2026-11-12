@@ -79,6 +79,13 @@ class ScanCreated(BaseModel):
     status: str
 
 
+class IngestCreated(ScanCreated):
+    """Ingest result. "New" means the repository had no earlier finding with that fingerprint."""
+
+    new_findings: int = 0
+    new_blocking_findings: int = 0
+
+
 class ScanOut(BaseModel):
     id: str
     repository_id: str

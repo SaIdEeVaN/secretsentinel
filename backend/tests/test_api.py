@@ -370,6 +370,41 @@ def test_ingest_requires_token_and_strict_schema(make_client):
         assert scan["mode"] == "ci" and scan["source"] == "ingest" and scan["blocking_findings"] == 1
 
 
+def test_ingest_reports_new_blocking_findings(make_client):
+    tool = {"name": "SecretSentinel", "version": "1.0.0", "scanner": "gitleaks", "scanner_version": "8.30.1",
+            "ruleset_version": "1.0.0", "ruleset_digest": "sha256:ab", "policy_digest": "sha256:cd"}
+
+    def finding(path, blocking=True):
+        return {"fingerprint": "ss1:" + "0" * 32, "rule_id": "web3-evm-private-key-assignment", "title": "t",
+                "rule_family": "web3-signing-key", "severity": "critical" if blocking else "low", "confidence": "high",
+                "requirement": "W3-01", "relative_path": path, "start_line": 1, "end_line": 1, "start_column": 1,
+                "commit_sha": "b" * 40, "entropy": 3.8, "sources": ["git"], "also_matched": [], "status": "open",
+                "suppression_id": None, "blocking": blocking, "remediation_key": "ROTATE_SIGNING_KEY"}
+
+    def report(findings, name="acme/app"):
+        blocking = sum(1 for f in findings if f["blocking"])
+        return {
+            "schema": "secretsentinel-report/v1", "tool": tool, "repository_name": name, "findings": findings,
+            "scan": {"target": "repo", "mode": "git", "scope": "full-history", "status": "completed", "error_code": None,
+                     "error_message": None, "policy_result": "fail" if blocking else "pass", "fail_on": "high",
+                     "commit_sha": "a" * 40, "started_at": None, "finished_at": None, "total_findings": len(findings),
+                     "blocking_findings": blocking, "suppressed_findings": 0,
+                     "severity_counts": {"critical": blocking, "high": 0, "medium": 0, "low": len(findings) - blocking},
+                     "warnings": []},
+        }
+
+    h = {"Authorization": "Bearer ingest-secret"}
+    with make_client(ingest_token="ingest-secret") as c:
+        first = c.post("/api/v1/ingest/scan-summary", json=report([finding("a.env"), finding("docs/n.md", False)]), headers=h).json()
+        assert (first["new_findings"], first["new_blocking_findings"]) == (2, 1)  # first upload: everything is new
+        again = c.post("/api/v1/ingest/scan-summary", json=report([finding("a.env"), finding("docs/n.md", False)]), headers=h).json()
+        assert (again["new_findings"], again["new_blocking_findings"]) == (0, 0)  # unchanged: no alert
+        more = c.post("/api/v1/ingest/scan-summary", json=report([finding("a.env"), finding("b.env")]), headers=h).json()
+        assert (more["new_findings"], more["new_blocking_findings"]) == (1, 1)  # one new blocking finding
+        other = c.post("/api/v1/ingest/scan-summary", json=report([finding("a.env")], name="acme/other"), headers=h).json()
+        assert other["new_blocking_findings"] == 1  # history is per repository
+
+
 def test_db_sessions_commit_before_the_response_is_sent(client):
     """Regression: request-scoped yield deps commit after the response is sent,
     so a browser reading right after a write saw stale data (found by the E2E

@@ -12,6 +12,10 @@
 * Free hosting tiers sleep when idle, so connection errors and 502/503/504
   responses are retried with back-off while the service wakes up.
 * Standard library only, so it runs in the minimal CI environment.
+* With --fail-on-new-blocking the script exits 4 when the dashboard reports
+  blocking findings this repository has never had before. The workflow run
+  then fails and GitHub's own failed-run email is the (private) alert. Only
+  counts are printed: run logs of public repositories are public.
 """
 
 from __future__ import annotations
@@ -28,6 +32,7 @@ from urllib.parse import urlparse
 SCHEMA = "secretsentinel-report/v1"
 INGEST_PATH = "/api/v1/ingest/scan-summary"
 RETRY_STATUSES = {502, 503, 504}
+EXIT_NEW_BLOCKING = 4
 
 
 def _fail(message: str) -> int:
@@ -94,6 +99,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--attempts", type=int, default=6)
     ap.add_argument("--timeout", type=int, default=90)
     ap.add_argument("--wait", type=float, default=15.0, help="base back-off in seconds")
+    ap.add_argument("--fail-on-new-blocking", action="store_true",
+                    help=f"exit {EXIT_NEW_BLOCKING} if the upload contains blocking findings new to this repository")
     args = ap.parse_args(argv)
 
     token = os.environ.get("SECRETSENTINEL_INGEST_TOKEN", "")
@@ -116,6 +123,16 @@ def main(argv: list[str] | None = None) -> int:
             f"policy {scan.get('policy_result')}, {scan.get('blocking_findings', 0)} blocking of "
             f"{scan.get('total_findings', 0)} finding(s)."
         )
+        new_blocking = payload.get("new_blocking_findings")
+        if isinstance(new_blocking, int):
+            print(f"New since earlier uploads: {payload.get('new_findings', 0)} finding(s), {new_blocking} blocking.")
+            if new_blocking > 0 and args.fail_on_new_blocking:
+                repo = report.get("repository_name") or "this repository"
+                message = f"{new_blocking} new blocking finding(s) in {repo}. Details are on the dashboard."
+                if os.environ.get("GITHUB_ACTIONS") == "true":
+                    print(f"::error title=New blocking findings::{message}")
+                _fail(message)
+                return EXIT_NEW_BLOCKING
         return 0
     error = payload.get("error", {}) if isinstance(payload, dict) else {}
     hint = {401: " Check SECRETSENTINEL_INGEST_TOKEN matches the dashboard's INGEST_TOKEN.",

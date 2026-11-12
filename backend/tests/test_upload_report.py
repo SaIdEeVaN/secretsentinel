@@ -92,3 +92,27 @@ def test_refuses_non_report_files_and_missing_token(tmp_path, server, monkeypatc
 def test_gives_up_when_unreachable(report, monkeypatch):
     monkeypatch.setenv("SECRETSENTINEL_INGEST_TOKEN", TOKEN)
     assert upload_report.main([str(report), "--url", "http://127.0.0.1:9", "--attempts", "2", "--wait", "0.01", "--timeout", "2"]) == 1
+
+
+@pytest.mark.parametrize(
+    ("flag", "new_blocking", "expected"),
+    [(True, 2, 4), (False, 2, 0), (True, 0, 0)],
+)
+def test_new_blocking_findings_fail_only_when_asked(server, report, monkeypatch, capsys, flag, new_blocking, expected):
+    monkeypatch.setenv("SECRETSENTINEL_INGEST_TOKEN", TOKEN)
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    server["responses"] = [(201, {"scan_id": "s1", "status": "completed", "new_findings": 3, "new_blocking_findings": new_blocking})]
+    argv = [str(report), "--url", server["url"], "--repository", "acme/app"]
+    rc = upload_report.main(argv + (["--fail-on-new-blocking"] if flag else []))
+    out = capsys.readouterr()
+    assert rc == expected
+    assert f"{new_blocking} blocking" in out.out
+    if expected:
+        assert "::error title=New blocking findings::2 new blocking finding(s) in acme/app" in out.out
+    assert TOKEN not in out.out + out.err
+
+
+def test_older_dashboard_without_new_counts_never_fails(server, report, monkeypatch):
+    monkeypatch.setenv("SECRETSENTINEL_INGEST_TOKEN", TOKEN)
+    rc = upload_report.main([str(report), "--url", server["url"], "--fail-on-new-blocking"])
+    assert rc == 0

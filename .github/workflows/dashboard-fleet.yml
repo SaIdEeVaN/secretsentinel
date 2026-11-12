@@ -120,7 +120,9 @@ jobs:
           SECRETSENTINEL_DASHBOARD_URL: ${{ vars.SECRETSENTINEL_DASHBOARD_URL }}
           SECRETSENTINEL_INGEST_TOKEN: ${{ secrets.SECRETSENTINEL_INGEST_TOKEN }}
           TARGET_REPOSITORY: ${{ matrix.repo }}
-        run: python scanner/scripts/upload_report.py "$RUNNER_TEMP/secretsentinel-report.json" --repository "$TARGET_REPOSITORY"
+        # Fails this job only for blocking findings the repository never had before, so
+        # GitHub's failed-run email is the alert. Logs show counts only (public repo).
+        run: python scanner/scripts/upload_report.py "$RUNNER_TEMP/secretsentinel-report.json" --repository "$TARGET_REPOSITORY" --fail-on-new-blocking
 
       - name: Flag incomplete scans
         if: ${{ steps.scan.outputs.exit_code == '2' || steps.scan.outputs.exit_code == '3' }}

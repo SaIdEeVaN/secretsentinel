@@ -78,7 +78,8 @@ jobs:
         env:
           SECRETSENTINEL_DASHBOARD_URL: ${{ vars.SECRETSENTINEL_DASHBOARD_URL }}
           SECRETSENTINEL_INGEST_TOKEN: ${{ secrets.SECRETSENTINEL_INGEST_TOKEN }}
-        run: python scripts/upload_report.py "$RUNNER_TEMP/secretsentinel-report.json"
+        # Fails only for blocking findings new to this repository (see docs/HOSTING.md, Alerts).
+        run: python scripts/upload_report.py "$RUNNER_TEMP/secretsentinel-report.json" --fail-on-new-blocking
 
       - name: Flag incomplete scans
         if: ${{ steps.scan.outputs.exit_code == '2' || steps.scan.outputs.exit_code == '3' }}
