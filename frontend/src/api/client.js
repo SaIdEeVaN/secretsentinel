@@ -110,6 +110,7 @@ export const api = {
   exportScan: (id, format) => request(`/scans/${encodeURIComponent(id)}/export${query({ format })}`, { responseType: "blob" }),
 
   findings: (params) => request(`/findings${query(params)}`),
+  findingFacets: (params) => request(`/findings/facets${query(params)}`),
   finding: (id) => request(`/findings/${encodeURIComponent(id)}`),
   updateFinding: (id, status) => request(`/findings/${encodeURIComponent(id)}`, { method: "PATCH", body: { status } }),
 

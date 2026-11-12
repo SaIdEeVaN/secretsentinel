@@ -8,6 +8,36 @@ import { MODE_LABEL } from "../components/format.js";
 import { useAsync } from "../hooks/useAsync.js";
 import { FindingDetailPanel } from "./FindingDetail.jsx";
 
+const SEVERITY_CHIPS = [["critical", "Critical"], ["high", "High"], ["medium", "Medium"], ["low", "Low"]];
+const STATUS_CHIPS = [["open", "Open"], ["acknowledged", "Acknowledged"], ["resolved", "Resolved"], ["suppressed", "Suppressed"]];
+
+function sum(counts) {
+  return counts ? Object.values(counts).reduce((a, b) => a + b, 0) : null;
+}
+
+/** A joined row of toggle buttons with optional counts (design: segmented filter). */
+function ChipGroup({ label, options, value, counts, onChange }) {
+  const all = [["", "All", sum(counts)], ...options.map(([v, l]) => [v, l, counts ? counts[v] ?? 0 : null])];
+  return (
+    <div role="group" aria-label={label} className="flex flex-wrap overflow-hidden rounded-md border border-line">
+      {all.map(([v, l, n]) => (
+        <button
+          key={v || "all"}
+          type="button"
+          aria-pressed={value === v}
+          onClick={() => onChange(v)}
+          className={`min-h-8 border-r border-line px-2.5 py-1.5 text-xs last:border-r-0 ${
+            value === v ? "bg-surface-2 font-semibold text-ink" : "text-muted hover:text-ink"
+          }`}
+        >
+          {l}
+          {n != null && <span className="mono ml-1.5 text-faint">{n}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 const EMPTY = { severity: "", status: "", rule_id: "", mode: "", repository_id: "", blocking: "", latest_only: "true" };
 
 export default function Findings() {
@@ -18,9 +48,17 @@ export default function Findings() {
   const repos = useAsync(() => api.repositories(), []);
   const rules = useAsync(() => api.rules(), []);
   const list = useAsync(() => api.findings({ ...filters, page, page_size: 25 }), [filters, page]);
-  const set = (k) => (e) => {
+  // Counts for the chips; if they fail to load the chips simply show no numbers.
+  const facets = useAsync(() => api.findingFacets(filters), [filters]);
+  const counts = facets.error ? null : facets.data;
+  const choose = (k, v) => {
     setPage(1);
-    setFilters((f) => ({ ...f, [k]: e.target.value }));
+    setFilters((f) => ({ ...f, [k]: v }));
+  };
+  const set = (k) => (e) => choose(k, e.target.value);
+  const refresh = () => {
+    list.reload();
+    facets.reload();
   };
 
   const select = (f) => {
@@ -39,23 +77,20 @@ export default function Findings() {
           </button>
         }
       />
-      <form className="card mb-4 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Filter findings" onSubmit={(e) => e.preventDefault()}>
-        <Field label="Severity" htmlFor="ff-sev">
-          <select id="ff-sev" className="input" value={filters.severity} onChange={set("severity")}>
-            <option value="">Any</option>
-            {["critical", "high", "medium", "low"].map((s) => (
-              <option key={s}>{s}</option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Status" htmlFor="ff-status">
-          <select id="ff-status" className="input" value={filters.status} onChange={set("status")}>
-            <option value="">Any</option>
-            {["open", "acknowledged", "resolved", "suppressed"].map((s) => (
-              <option key={s}>{s}</option>
-            ))}
-          </select>
-        </Field>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <ChipGroup label="Severity" options={SEVERITY_CHIPS} value={filters.severity} counts={counts?.severity} onChange={(v) => choose("severity", v)} />
+        <ChipGroup label="Status" options={STATUS_CHIPS} value={filters.status} counts={counts?.status} onChange={(v) => choose("status", v)} />
+      </div>
+      {counts && (
+        <p className="mb-3 flex items-center gap-2.5 rounded-lg border border-line bg-surface px-3 py-2 text-[12.5px] text-muted">
+          <span className={`mono ${counts.status.open ? "text-warn" : "text-ok"}`}>{counts.status.open}</span>
+          <span>
+            open finding{counts.status.open === 1 ? "" : "s"} {filters.latest_only === "true" ? "in the latest scans" : "across all scan history"}.
+            Resolved and suppressed findings are kept for review.
+          </span>
+        </p>
+      )}
+      <form className="card mb-4 grid gap-3 p-4 min-[640px]:grid-cols-2 min-[1000px]:grid-cols-5" aria-label="More filters" onSubmit={(e) => e.preventDefault()}>
         <Field label="Rule" htmlFor="ff-rule">
           <select id="ff-rule" className="input" value={filters.rule_id} onChange={set("rule_id")}>
             <option value="">Any</option>
@@ -122,7 +157,7 @@ export default function Findings() {
             className="hidden self-start min-[1000px]:sticky min-[1000px]:top-4 min-[1000px]:block min-[1000px]:max-h-[calc(100vh-2rem)] min-[1000px]:overflow-y-auto"
             aria-label="Finding details"
           >
-            <FindingDetailPanel key={selected} findingId={selected} compact onChanged={list.reload} onClose={() => setSelected(null)} />
+            <FindingDetailPanel key={selected} findingId={selected} compact onChanged={refresh} onClose={() => setSelected(null)} />
           </aside>
         )}
       </div>

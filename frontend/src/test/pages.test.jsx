@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
@@ -98,16 +98,67 @@ describe("Findings", () => {
     });
     renderAt("/findings", <Findings />);
     await screen.findByText(/Page 1 of 3/);
-    await userEvent.selectOptions(screen.getByLabelText("Severity"), "high");
+    await userEvent.click(within(screen.getByRole("group", { name: "Severity" })).getByRole("button", { name: /^High/ }));
     await userEvent.click(screen.getByRole("button", { name: /Next/ }));
     await screen.findByText(/Page 2 of 3/);
     await userEvent.click(screen.getByRole("button", { name: "Reset filters" }));
     await screen.findByText(/Page 1 of 3/);
     await waitFor(() => {
-      const params = new URL(calls.filter((c) => c.path.startsWith("/findings")).at(-1).path, "http://local").searchParams;
+      const params = new URL(calls.filter((c) => c.path.split("?")[0] === "/findings").at(-1).path, "http://local").searchParams;
       expect(params.get("page")).toBe("1");
       expect(params.has("severity")).toBe(false);
     });
+  });
+});
+
+describe("Findings filter chips", () => {
+  const FACETS = {
+    total: 3,
+    severity: { critical: 1, high: 2, medium: 0, low: 0 },
+    status: { open: 2, acknowledged: 1, resolved: 0, suppressed: 0 },
+  };
+
+  it("shows counts on each chip and a summary of open findings", async () => {
+    mockApi({
+      "GET /repositories": [], "GET /rules": { rules: [] },
+      "GET /findings": { items: [finding()], total: 3, page: 1, page_size: 25 },
+      "GET /findings/facets": FACETS,
+    });
+    renderAt("/findings", <Findings />);
+    const sev = await screen.findByRole("group", { name: "Severity" });
+    await waitFor(() => expect(within(sev).getByRole("button", { name: /^All/ })).toHaveTextContent("All3"));
+    expect(within(sev).getByRole("button", { name: /^High/ })).toHaveTextContent("High2");
+    const st = screen.getByRole("group", { name: "Status" });
+    expect(within(st).getByRole("button", { name: /^Acknowledged/ })).toHaveTextContent("Acknowledged1");
+    expect(screen.getByText(/open findings in the latest scans/)).toBeInTheDocument();
+  });
+
+  it("filters the list and the counts when a chip is chosen", async () => {
+    const { calls } = mockApi({
+      "GET /repositories": [], "GET /rules": { rules: [] },
+      "GET /findings": { items: [finding()], total: 1, page: 1, page_size: 25 },
+      "GET /findings/facets": FACETS,
+    });
+    renderAt("/findings", <Findings />);
+    const st = await screen.findByRole("group", { name: "Status" });
+    await userEvent.click(within(st).getByRole("button", { name: /^Open/ }));
+    expect(within(st).getByRole("button", { name: /^Open/ })).toHaveAttribute("aria-pressed", "true");
+    await waitFor(() => {
+      const last = (prefix) => new URL(calls.filter((c) => c.path.split("?")[0] === prefix).at(-1).path, "http://local").searchParams;
+      expect(last("/findings").get("status")).toBe("open");
+      expect(last("/findings/facets").get("status")).toBe("open");
+    });
+  });
+
+  it("still works when the counts cannot be loaded", async () => {
+    mockApi({
+      "GET /repositories": [], "GET /rules": { rules: [] },
+      "GET /findings": { items: [finding()], total: 1, page: 1, page_size: 25 },
+    });
+    renderAt("/findings", <Findings />);
+    const sev = await screen.findByRole("group", { name: "Severity" });
+    expect(within(sev).getByRole("button", { name: /^All/ })).toHaveTextContent(/^All$/);
+    expect(screen.queryByText(/open finding/)).not.toBeInTheDocument();
   });
 });
 

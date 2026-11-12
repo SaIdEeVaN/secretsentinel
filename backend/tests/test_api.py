@@ -143,6 +143,33 @@ def test_filters_and_pagination(client, root, fake_gitleaks):
     assert scans["total"] == 1
 
 
+def test_finding_facets_match_the_list(client, root, fake_gitleaks):
+    fake_gitleaks.records([raw_record(HEX64), raw_record(HEX64, RuleID="generic-api-key", File="docs/a.md", StartLine=9)])
+    repo_id = _register(client, root)
+    _wait(client, client.post("/api/v1/scans", json={"repository_id": repo_id, "mode": "dir"}).json()["scan_id"])
+
+    facets = client.get("/api/v1/findings/facets").json()
+    assert facets["total"] == client.get("/api/v1/findings").json()["total"] == 2
+    assert facets["severity"]["critical"] == 1 and sum(facets["severity"].values()) == 2
+    assert facets["status"] == {"open": 2, "acknowledged": 0, "resolved": 0, "suppressed": 0}
+
+    # Each dimension ignores its own filter and applies the others.
+    crit = client.get("/api/v1/findings/facets", params={"severity": "critical"}).json()
+    assert crit["total"] == 1
+    assert sum(crit["severity"].values()) == 2
+    assert crit["status"]["open"] == 1
+
+    f = client.get("/api/v1/findings", params={"severity": "critical"}).json()["items"][0]
+    assert client.patch(f"/api/v1/findings/{f['id']}", json={"status": "acknowledged"}).status_code == 200
+    ack = client.get("/api/v1/findings/facets", params={"status": "acknowledged"}).json()
+    assert ack["total"] == 1 and ack["severity"]["critical"] == 1
+    assert ack["status"]["open"] == 1 and ack["status"]["acknowledged"] == 1
+
+    assert client.get("/api/v1/findings/facets", params={"severity": "bogus"}).status_code == 422
+    # "facets" is a route, never a finding id
+    assert client.get("/api/v1/findings/facets").status_code == 200
+
+
 def test_failed_scan_reports_unknown_status(client, root, fake_gitleaks):
     fake_gitleaks.scenario("crash")
     repo_id = _register(client, root)

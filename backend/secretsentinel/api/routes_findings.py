@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from ..core.errors import ErrorCode, SecretSentinelError
 from ..core.security import safe_text
 from ..models import Finding, Repository, Scan, Suppression
-from ..schemas import FindingDetail, FindingOut, FindingUpdate, Page, SuppressionCreate, SuppressionOut
+from ..schemas import FindingDetail, FindingFacets, FindingOut, FindingUpdate, Page, SuppressionCreate, SuppressionOut
 from ..services.policy import MAX_SUPPRESSION_DAYS
 from ..services.remediation import get_remediation
 from ..services.rules import load_ruleset
@@ -88,6 +88,55 @@ def list_findings(
     ).all()
     items = [finding_out(f, m, name) for f, m, name in rows]
     return {"items": items, "total": total or 0, "page": pager.page, "page_size": pager.page_size}
+
+
+SEVERITIES = ("critical", "high", "medium", "low")
+STATUSES = ("open", "acknowledged", "resolved", "suppressed")
+
+
+@router.get("/findings/facets", response_model=FindingFacets)
+def finding_facets(
+    severity: str | None = Query(None, pattern="^(critical|high|medium|low)$"),
+    status_: str | None = Query(None, alias="status", pattern="^(open|acknowledged|resolved|suppressed)$"),
+    rule_id: str | None = Query(None, max_length=100),
+    mode: str | None = Query(None, pattern="^(dir|git|both|ci)$"),
+    scan_id: str | None = Query(None, max_length=36),
+    repository_id: str | None = Query(None, max_length=36),
+    blocking: bool | None = None,
+    latest_only: bool = Query(True),
+    session: Session = Depends(get_db, scope="function"),
+):
+    """Counts by severity and by status for the same scope as ``GET /findings``.
+
+    Declared before ``/findings/{finding_id}`` so "facets" is never read as an id.
+    """
+    latest = None if scan_id or not latest_only else (latest_completed_scan_ids(session) or [""])
+
+    def scoped():
+        q = select(Finding.severity, Finding.status).join(Scan, Finding.scan_id == Scan.id).join(
+            Repository, Finding.repository_id == Repository.id
+        )
+        if scan_id:
+            q = q.where(Finding.scan_id == scan_id)
+        elif latest is not None:
+            q = q.where(Finding.scan_id.in_(latest))
+        if repository_id:
+            q = q.where(Finding.repository_id == repository_id)
+        return q
+
+    def grouped(q, column: str, keys: tuple[str, ...]) -> dict[str, int]:
+        sub = q.subquery()
+        rows = session.execute(select(sub.c[column], func.count()).group_by(sub.c[column])).all()
+        counts = {k: 0 for k in keys}
+        counts.update({k: n for k, n in rows if k in counts})
+        return counts
+
+    everything = apply_finding_filters(scoped(), severity, status_, rule_id, mode, blocking)
+    return FindingFacets(
+        total=session.scalar(select(func.count()).select_from(everything.subquery())) or 0,
+        severity=grouped(apply_finding_filters(scoped(), None, status_, rule_id, mode, blocking), "severity", SEVERITIES),
+        status=grouped(apply_finding_filters(scoped(), severity, None, rule_id, mode, blocking), "status", STATUSES),
+    )
 
 
 def _detail(session: Session, f: Finding) -> dict:

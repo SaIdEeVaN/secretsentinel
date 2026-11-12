@@ -148,6 +148,14 @@ class RemediationOut(BaseModel):
     notes: list[str]
 
 
+class FindingFacets(BaseModel):
+    """Counts for the Findings filter chips. Each dimension ignores its own filter."""
+
+    total: int
+    severity: dict[str, int]
+    status: dict[str, int]
+
+
 class FindingDetail(FindingOut):
     remediation: RemediationOut
     rule_description: str | None
