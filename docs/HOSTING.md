@@ -127,6 +127,37 @@ Then, in that repository on GitHub:
 The workflow is skipped while the variable is unset, and it never runs for pull
 requests. Merge blocking stays with `secret-scan.yml` (see [CI_SETUP.md](CI_SETUP.md)).
 
+## Alerts: new blocking findings
+
+The scan workflows upload with `--fail-on-new-blocking`. When a repository has
+blocking findings it **never had before**, that repository's job fails, so
+GitHub's own "workflow run failed" email is the alert. Known findings that are
+still present do not fail it again; check those on the dashboard.
+
+- Make sure the email is on: GitHub → your avatar → Settings → Notifications,
+  the **Actions** section: email for failed workflow runs. For the weekly
+  schedule, GitHub notifies the person who last changed the schedule line.
+- The alert is deliberately not a GitHub issue: issues and run logs of a
+  public repository are public, and a list of file locations would point
+  others at possibly real secrets. Logs show counts only; details stay on the
+  signed-in dashboard.
+- "New" compares fingerprints with everything the dashboard already stored for
+  that repository, so the first scan of a newly listed repository alerts once
+  for whatever it finds.
+
+## Scan history retention
+
+`render.yaml` sets `SCAN_RETENTION_DAYS=180`: when the service starts (it
+restarts after every idle period on the free plan), scans older than 180 days
+are deleted with their findings. Never deleted, whatever their age:
+
+- each repository's most recent completed scan (the dashboard's current state),
+- scans with an attestation (signed evidence),
+- scans still queued or running.
+
+Set it to `0` to keep everything. To prune by hand:
+`secretsentinel db prune --days 180` with `DB_URL` pointing at the database.
+
 ## Rotating tokens
 
 Render → Environment → edit `API_TOKEN` or `INGEST_TOKEN` (use a long random

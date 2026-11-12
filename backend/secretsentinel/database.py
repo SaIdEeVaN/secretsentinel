@@ -9,11 +9,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterator
 
-from sqlalchemy import create_engine, event, select
+from sqlalchemy import create_engine, delete, event, func, select
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
-from .models import SCHEMA_VERSION, Base, Meta, Scan
+from .models import SCHEMA_VERSION, Attestation, Base, Meta, Scan
 
 _lock = threading.Lock()
 _engine: Engine | None = None
@@ -130,10 +130,34 @@ def mark_interrupted_scans(session: Session) -> int:
 
 
 def prune_old_scans(session: Session, retention_days: int) -> int:
+    """Delete scans older than ``retention_days`` (0 disables). Returns how many.
+
+    Always kept, whatever their age:
+    * each repository's most recent completed scan - the dashboard's current state;
+    * scans still queued or running;
+    * scans with an attestation - signed evidence must outlive the retention window.
+    Findings of deleted scans are removed by the ON DELETE CASCADE foreign key.
+    """
     if retention_days <= 0:
         return 0
     cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
-    old = session.scalars(select(Scan).where(Scan.created_at < cutoff)).all()
-    for scan in old:
-        session.delete(scan)
-    return len(old)
+    newest = (
+        select(Scan.repository_id, func.max(Scan.created_at).label("newest"))
+        .where(Scan.status == "completed")
+        .group_by(Scan.repository_id)
+        .subquery()
+    )
+    current = select(Scan.id).join(
+        newest, (Scan.repository_id == newest.c.repository_id) & (Scan.created_at == newest.c.newest)
+    ).where(Scan.status == "completed")
+    ids = session.scalars(
+        select(Scan.id).where(
+            Scan.created_at < cutoff,
+            Scan.status.notin_(("queued", "running")),
+            Scan.id.notin_(current),
+            Scan.id.notin_(select(Attestation.scan_id)),
+        )
+    ).all()
+    for i in range(0, len(ids), 500):
+        session.execute(delete(Scan).where(Scan.id.in_(ids[i : i + 500])).execution_options(synchronize_session=False))
+    return len(ids)

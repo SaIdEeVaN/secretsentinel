@@ -39,6 +39,9 @@ services:
         value: "true"
       - key: LOG_LEVEL
         value: INFO
+      # Keep 180 days of scan history (each repository's latest scan is always kept).
+      - key: SCAN_RETENTION_DAYS
+        value: "180"
       - key: API_TOKEN
         generateValue: true
       - key: INGEST_TOKEN
