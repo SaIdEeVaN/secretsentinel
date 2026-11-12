@@ -36,9 +36,11 @@ updates:
     commit-message:
       prefix: "deps(frontend)"
 
-  # pyproject.toml ranges and the hash-pinned requirements-ci.txt used by the CI gate.
+  # The hash-pinned requirements-ci.txt used by the CI gate, and pyproject.toml ranges
+  # only when a release falls outside them (no PRs that merely raise a lower bound).
   - package-ecosystem: pip
     directory: /backend
+    versioning-strategy: increase-if-necessary
     schedule:
       interval: weekly
       day: tuesday
@@ -52,11 +54,15 @@ updates:
     commit-message:
       prefix: "deps(backend)"
 
-  # Optional P2 tooling (Hardhat); checked less often.
+  # Optional P2 tooling (Hardhat); checked less often. Major versions (e.g. Hardhat 3)
+  # need migration work, so only minor/patch updates are proposed.
   - package-ecosystem: npm
     directory: /contracts
     schedule:
       interval: monthly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     cooldown:
       default-days: 7
     groups:
