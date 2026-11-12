@@ -5,6 +5,7 @@ import { EmptyState, ErrorState, Loading } from "../components/States.jsx";
 import { PageHeader } from "../components/Widgets.jsx";
 import { formatDate } from "../components/format.js";
 import { useAsync } from "../hooks/useAsync.js";
+import { useSystem } from "../context/system.js";
 
 const POLICY_EXAMPLE = `# .secretsentinel.yml (review changes like code; protect with CODEOWNERS)
 version: 1
@@ -20,8 +21,65 @@ suppressions:            # reviewed exceptions; expire automatically
     expires: 2027-03-31
 baseline: .secretsentinel-baseline.json   # optional, see 'secretsentinel baseline create'`;
 
+const SEVERITY_ORDER = ["critical", "high", "medium", "low"];
+const SEVERITY_EXAMPLE = {
+  critical: "Strongly contextual private signing key or mnemonic candidate",
+  high: "Cloud or service credentials, provider token patterns",
+  medium: "Ambiguous potential secret, moderate confidence",
+  low: "Weak pattern or explicitly synthetic fixture",
+};
+const ACTION_STYLE = { BLOCK: "text-critical", WARN: "text-medium", INFORM: "text-muted" };
+
+/** What each severity does under the server's default threshold (design: severity policy). */
+export function SeverityPolicy({ failOn }) {
+  const level = failOn === "none" ? -1 : SEVERITY_ORDER.indexOf(failOn);
+  return (
+    <section className="card" aria-labelledby="sevpol-h">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 p-4 pb-2">
+        <h2 id="sevpol-h" className="font-semibold">
+          Severity policy
+        </h2>
+        <span className="mono text-xs text-muted">fail-on {failOn}</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="table">
+          <thead>
+            <tr>
+              <th scope="col">Severity</th>
+              <th scope="col">Typical match</th>
+              <th scope="col" className="text-right">
+                Action
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {SEVERITY_ORDER.map((sev, i) => {
+              const action = i <= level ? "BLOCK" : sev === "low" ? "INFORM" : "WARN";
+              return (
+                <tr key={sev}>
+                  <td>
+                    <SeverityBadge severity={sev} />
+                  </td>
+                  <td className="text-sm text-muted">{SEVERITY_EXAMPLE[sev]}</td>
+                  <td className={`mono text-right text-xs font-semibold ${ACTION_STYLE[action]}`}>{action}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="px-4 pb-4 pt-2 text-xs text-muted">
+        BLOCK fails the scan and the merge gate. WARN and INFORM are reported but never block. A repository's{" "}
+        <span className="mono">.secretsentinel.yml</span> can set its own <span className="mono">fail_on</span>; scan requests can
+        override it too.
+      </p>
+    </section>
+  );
+}
+
 export default function Rules() {
   const rules = useAsync(() => api.rules(), []);
+  const { status: system } = useSystem();
   const sups = useAsync(() => api.suppressions(), []);
   const [web3Only, setWeb3Only] = useState(false);
   const [error, setError] = useState(null);
@@ -47,6 +105,7 @@ export default function Rules() {
       <ErrorState error={rules.error} onRetry={rules.reload} />
       {rules.data && (
         <div className="space-y-5">
+          {system?.default_fail_on && <SeverityPolicy failOn={system.default_fail_on} />}
           <section className="card p-4 text-sm">
             <p>
               Ruleset <span className="mono">{rules.data.ruleset_version}</span> · digest{" "}

@@ -15,6 +15,21 @@ function Ok({ ok, children }) {
   );
 }
 
+const TAG_TONE = { ok: "border-ok/40 text-ok", warn: "border-warn/40 text-warn", muted: "border-line text-muted" };
+
+/** A titled settings card with a short status tag (design: Settings). */
+function Group({ title, tag, tone = "muted", items }) {
+  return (
+    <section className="card p-4" aria-label={title}>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="font-semibold">{title}</h2>
+        {tag && <span className={`mono rounded border px-1.5 py-0.5 text-[11px] ${TAG_TONE[tone]}`}>{tag}</span>}
+      </div>
+      <KeyValue rows items={items} />
+    </section>
+  );
+}
+
 export default function Settings({ onAuthChanged }) {
   const status = useAsync(() => api.systemStatus(), []);
   const repos = useAsync(() => api.repositories(), []);
@@ -39,14 +54,17 @@ export default function Settings({ onAuthChanged }) {
     <>
       <PageHeader title="Settings" subtitle="Local configuration is read from environment variables when the backend starts." />
       <div className="space-y-5">
-        <section className="card p-4" aria-labelledby="sys-h">
-          <h2 id="sys-h" className="mb-3 font-semibold">
-            System status
-          </h2>
-          {status.loading && !s && <Loading />}
-          <ErrorState error={status.error} onRetry={status.reload} />
-          {s && (
-            <KeyValue
+        <h2 id="sys-h" className="sr-only">
+          System status
+        </h2>
+        {status.loading && !s && <Loading />}
+        <ErrorState error={status.error} onRetry={status.reload} />
+        {s && (
+          <div className="grid gap-5 min-[1000px]:grid-cols-2" aria-labelledby="sys-h">
+            <Group
+              title="Scanner"
+              tag={s.scanner.available ? "ready" : "missing"}
+              tone={s.scanner.available ? "ok" : "warn"}
               items={[
                 ["SecretSentinel", <span className="mono">{s.version}</span>],
                 [
@@ -55,20 +73,38 @@ export default function Settings({ onAuthChanged }) {
                 ],
                 ["Git", <Ok ok={s.git_available}>{s.git_available ? "available" : "not found (git/both modes unavailable)"}</Ok>],
                 ["Ruleset", <span className="mono">{s.ruleset_version ?? "invalid"}</span>],
-                ["Allowed scan roots", s.allowed_roots.length ? <span className="mono">{s.allowed_roots.join("; ")}</span> : "none (set SCAN_ROOT_ALLOWLIST)"],
-                ["Default block threshold", s.default_fail_on],
                 ["Scan timeout", `${s.timeout_seconds} s`],
                 ["Max file size", `${s.max_file_mb} MB`],
                 ["Concurrent scans", s.max_concurrent_scans],
-                ["Environment", s.app_env],
-                ["Mode", s.hosted ? "hosted (results uploaded from CI)" : "local"],
-                ["CI uploads", s.ingest_enabled ? "enabled" : "disabled (set INGEST_TOKEN)"],
-                ["API authentication", s.auth_required ? "required (remote mode)" : "not required (loopback only)"],
-                ["Blockchain attestations", s.blockchain_enabled ? "enabled (Sepolia, optional)" : "disabled"],
               ]}
             />
-          )}
-        </section>
+            <Group
+              title="Scanning"
+              tag={s.hosted ? "hosted" : "local"}
+              items={[
+                ["Mode", s.hosted ? "hosted (results uploaded from CI)" : "local"],
+                ["Allowed scan roots", s.allowed_roots.length ? <span className="mono">{s.allowed_roots.join("; ")}</span> : "none (set SCAN_ROOT_ALLOWLIST)"],
+                ["Default block threshold", s.default_fail_on],
+                ["CI uploads", s.ingest_enabled ? "enabled" : "disabled (set INGEST_TOKEN)"],
+              ]}
+            />
+            <Group
+              title="Server & access"
+              tag={s.auth_required ? "token required" : "loopback only"}
+              tone={s.auth_required || !s.hosted ? "ok" : "warn"}
+              items={[
+                ["Environment", s.app_env],
+                ["API authentication", s.auth_required ? "required (remote mode)" : "not required (loopback only)"],
+                ["Stored values", "metadata only; matched values are never stored"],
+              ]}
+            />
+            <Group
+              title="Attestations (P2)"
+              tag={s.blockchain_enabled ? "enabled" : "optional"}
+              items={[["Blockchain attestations", s.blockchain_enabled ? "enabled (Sepolia, optional)" : "disabled"]]}
+            />
+          </div>
+        )}
 
         {(s?.auth_required || hasAuthToken()) && (
           <section className="card p-4" aria-labelledby="auth-h">
