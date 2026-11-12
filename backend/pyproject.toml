@@ -25,9 +25,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-blockchain = ["eth-account>=0.13,<1"]
+blockchain = ["eth-account>=0.14.0,<1"]
 postgres = ["psycopg[binary]>=3.2,<4"]
-dev = ["pytest>=8", "httpx>=0.27", "eth-account>=0.13,<1"]
+dev = ["pytest>=8", "httpx>=0.27", "eth-account>=0.14.0,<1"]
 
 [project.scripts]
 secretsentinel = "secretsentinel.cli:main"
