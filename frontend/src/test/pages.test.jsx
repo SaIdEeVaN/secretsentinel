@@ -194,3 +194,55 @@ describe("ScanDetail", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Scan already finished");
   });
 });
+
+describe("Overview posture", () => {
+  const repo = (id, name, last_scan_status, last_policy_result) => ({
+    id, display_name: name, local_path: "", allowed: false, created_at: "2026-11-10T10:00:00Z",
+    last_scan_id: `scan-${id}`, last_scan_status, last_policy_result, last_scan_at: "2026-11-12T10:00:00Z",
+  });
+  const metrics = {
+    ...EMPTY_METRICS, repositories: 3, scans_total: 3, scans_completed: 3, latest_scans: [scan()], trend: [],
+  };
+
+  it("names the repositories that need attention", async () => {
+    mockApi({
+      "GET /metrics/overview": metrics,
+      "GET /system/status": STATUS,
+      "GET /findings": { items: [], total: 0, page: 1, page_size: 8 },
+      "GET /repositories": [
+        repo("a", "owner/pathway", "completed", "fail"),
+        repo("b", "owner/site", "failed", "not_evaluated"),
+        repo("c", "owner/clean", "completed", "pass"),
+      ],
+    });
+    renderAt("/", <Overview />);
+    expect(await screen.findByText("1 of 3 repositories have blocking findings in their latest scan.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "owner/pathway" })).toHaveAttribute("href", "/scans/scan-a");
+    expect(screen.getByRole("link", { name: "owner/site" })).toBeInTheDocument();
+    expect(screen.getByText("1 pass · 1 fail · 1 error")).toBeInTheDocument();
+  });
+
+  it("says when every repository passed, without claiming they are secure", async () => {
+    mockApi({
+      "GET /metrics/overview": metrics,
+      "GET /system/status": STATUS,
+      "GET /findings": { items: [], total: 0, page: 1, page_size: 8 },
+      "GET /repositories": [repo("a", "owner/a", "completed", "pass"), repo("b", "owner/b", "completed", "pass")],
+    });
+    renderAt("/", <Overview />);
+    expect(await screen.findByText("No blocking findings in the latest scan of all 2 repositories.")).toBeInTheDocument();
+    expect(screen.getByText(/not a guarantee/)).toBeInTheDocument();
+    expect(screen.queryByText(/secure/i)).not.toBeInTheDocument();
+  });
+
+  it("uses singular wording for one repository", async () => {
+    mockApi({
+      "GET /metrics/overview": { ...metrics, repositories: 1 },
+      "GET /system/status": STATUS,
+      "GET /findings": { items: [], total: 0, page: 1, page_size: 8 },
+      "GET /repositories": [repo("a", "owner/a", "completed", "fail")],
+    });
+    renderAt("/", <Overview />);
+    expect(await screen.findByText("The repository has blocking findings in its latest scan.")).toBeInTheDocument();
+  });
+});

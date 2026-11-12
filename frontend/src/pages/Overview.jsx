@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client.js";
 import FindingTable from "../components/FindingTable.jsx";
-import { CLEAN_TEXT, FAILED_TEXT, ResultPill, resultOf } from "../components/ScanStatus.jsx";
+import { ResultPill } from "../components/ScanStatus.jsx";
 import { EmptyState, ErrorState, Loading } from "../components/States.jsx";
 import { PageHeader, SeverityBars, StatCard, TrendChart } from "../components/Widgets.jsx";
 import { MODE_LABEL, timeAgo } from "../components/format.js";
@@ -14,19 +14,24 @@ function CiOnboarding() {
     <div className="card p-6">
       <h2 className="text-lg font-semibold">Waiting for the first scan upload</h2>
       <p className="mt-2 text-sm text-muted">
-        This hosted dashboard does not scan code itself. GitHub Actions scans each repository and uploads only the
-        redacted report here.
+        This hosted dashboard does not scan code itself. GitHub Actions scans your repositories and uploads only the redacted
+        report here.
       </p>
       <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm">
         <li>
-          Add <span className="mono">.github/workflows/dashboard-upload.yml</span> to the repository (see{" "}
-          <span className="mono">docs/HOSTING.md</span>).
+          In the repository that holds SecretSentinel, list the repositories to scan in{" "}
+          <span className="mono">.github/dashboard-repos.txt</span>, one <span className="mono">owner/name</span> per line. Private
+          ones also need the read-only <span className="mono">SECRETSENTINEL_REPO_READ_TOKEN</span> secret.
         </li>
         <li>
-          In the repository settings, add the variable <span className="mono">SECRETSENTINEL_DASHBOARD_URL</span> (this
-          site's address) and the secret <span className="mono">SECRETSENTINEL_INGEST_TOKEN</span>.
+          Add the variable <span className="mono">SECRETSENTINEL_DASHBOARD_URL</span> (this site's address) and, in the{" "}
+          <span className="mono">secretsentinel-dashboard</span> environment, the secret{" "}
+          <span className="mono">SECRETSENTINEL_INGEST_TOKEN</span>.
         </li>
-        <li>Push to the default branch or run the workflow manually. The scan appears here when it finishes.</li>
+        <li>
+          Run <span className="mono">Scan repository list for SecretSentinel dashboard</span> in GitHub Actions. Results appear here when
+          it finishes. See <span className="mono">docs/HOSTING.md</span> for details.
+        </li>
       </ol>
     </div>
   );
@@ -78,25 +83,70 @@ function Onboarding({ status, onDemo, demoBusy, demoError }) {
   );
 }
 
-function LatestResult({ scan }) {
-  const r = resultOf(scan);
-  let text;
-  if (r === "pass") text = scan.total_findings === 0 ? CLEAN_TEXT : `No blocking findings at or above “${scan.fail_on}”.`;
-  else if (r === "fail") text = `${scan.blocking_findings} blocking finding(s) at or above “${scan.fail_on}”.`;
-  else text = FAILED_TEXT;
-  const border = r === "pass" ? "border-ok/50" : r === "fail" ? "border-critical/60" : "border-warn/60";
+function classify(repo) {
+  if (!repo.last_scan_status) return "none";
+  if (repo.last_scan_status === "queued" || repo.last_scan_status === "running") return "pending";
+  if (repo.last_scan_status !== "completed") return "error";
+  if (repo.last_policy_result === "fail") return "fail";
+  if (repo.last_policy_result === "pass") return "pass";
+  return "error";
+}
+
+/** One answer across every repository's most recent scan (design: posture header). */
+export function Posture({ repos }) {
+  const groups = { pass: [], fail: [], error: [], pending: [], none: [] };
+  for (const r of repos) groups[classify(r)].push(r);
+  const scanned = repos.length - groups.none.length;
+  if (!scanned) return null;
+  const of = (n) => (scanned === 1 ? "The repository" : `${n} of ${scanned} repositories`);
+  let tone, pill, text;
+  if (groups.fail.length) {
+    tone = "border-critical/60";
+    pill = { status: "completed", policy_result: "fail" };
+    text = `${of(groups.fail.length)} ${scanned === 1 ? "has" : "have"} blocking findings in ${scanned === 1 ? "its" : "their"} latest scan.`;
+  } else if (groups.error.length) {
+    tone = "border-warn/60";
+    pill = { status: "failed" };
+    text = scanned === 1
+      ? "The repository's latest scan could not complete; its status is unknown."
+      : `${groups.error.length} of ${scanned} repositories' latest scan could not complete; their status is unknown.`;
+  } else if (groups.pass.length) {
+    tone = "border-ok/50";
+    pill = { status: "completed", policy_result: "pass" };
+    text = `No blocking findings in the latest scan of ${scanned === 1 ? "the repository" : `all ${scanned} repositories`}.`;
+  } else {
+    tone = "border-line";
+    pill = { status: "running" };
+    text = "Scans are in progress.";
+  }
+  const attention = [...groups.fail, ...groups.error].slice(0, 4);
+  const more = groups.fail.length + groups.error.length - attention.length;
+  const tally = [
+    [groups.pass.length, "pass"],
+    [groups.fail.length, "fail"],
+    [groups.error.length, "error"],
+    [groups.pending.length, "running"],
+  ].filter(([n]) => n > 0);
   return (
-    <section
-      aria-label="Latest scan result"
-      className={`card flex flex-wrap items-center gap-3 border p-3 ${border}`}
-    >
-      <ResultPill scan={scan} />
-      <p className="min-w-0 flex-1 text-sm">
-        <span className="font-semibold">{scan.repository_name}</span>: {text}
-      </p>
-      <Link to={`/scans/${scan.id}`} className="btn btn-ghost">
-        View scan
-      </Link>
+    <section aria-label="Current posture" className={`card border p-3 ${tone}`}>
+      <div className="flex flex-wrap items-center gap-3">
+        <ResultPill scan={pill} />
+        <p className="min-w-0 flex-1 text-sm font-medium">{text}</p>
+        <span className="mono text-[11px] text-faint">{tally.map(([n, w]) => `${n} ${w}`).join(" · ")}</span>
+      </div>
+      {attention.length > 0 && (
+        <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+          {attention.map((r) => (
+            <li key={r.id}>
+              <Link to={`/scans/${r.last_scan_id}`} className={classify(r) === "fail" ? "text-critical underline" : "text-warn underline"}>
+                {r.display_name}
+              </Link>
+            </li>
+          ))}
+          {more > 0 && <li className="text-muted">and {more} more</li>}
+        </ul>
+      )}
+      <p className="mt-1.5 text-[11px] text-faint">Reflects the configured rules and scanned scope. It is not a guarantee that no secrets exist.</p>
     </section>
   );
 }
@@ -108,6 +158,7 @@ export default function Overview() {
   const metrics = useAsync(() => api.overview(), []);
   const status = useAsync(() => api.systemStatus(), []);
   const current = useAsync(() => api.findings({ page_size: 8 }), []);
+  const repos = useAsync(() => api.repositories(), []);
   const [demoBusy, setDemoBusy] = useState(false);
   const [demoError, setDemoError] = useState(null);
 
@@ -148,7 +199,7 @@ export default function Overview() {
         ))}
       {m && m.scans_total > 0 && (
         <div className="space-y-5">
-          {m.latest_scans[0] && <LatestResult scan={m.latest_scans[0]} />}
+          {Array.isArray(repos.data) && <Posture repos={repos.data} />}
           <section aria-label="Summary" className="grid grid-cols-2 gap-3 min-[1000px]:grid-cols-5">
             <StatCard label="Repositories" value={m.repositories} />
             <StatCard label="Completed scans" value={m.scans_completed} />
