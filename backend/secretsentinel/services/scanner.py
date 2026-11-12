@@ -51,6 +51,8 @@ MIN_GITLEAKS = (8, 25, 0)
 # `git log` options appended by SecretSentinel. --no-ext-diff/--no-textconv stop
 # repository-local diff drivers from executing programs (invariant S4).
 _GIT_SAFE_LOG_OPTS = ["--no-ext-diff", "--no-textconv", "--diff-filter=tuxdb"]
+# `gitleaks git --pre-commit --staged` reads `git diff --staged`: only the index.
+STAGED_FLAGS = ["--pre-commit", "--staged"]
 _GIT_CONFIG_OVERRIDES = [("core.fsmonitor", "false"), ("core.pager", "cat")]
 _LOGGING_LEVEL_INFO = 20
 _LOGGING_LEVEL_WARN = 30
@@ -281,6 +283,7 @@ def build_gitleaks_command(
     ignore_dir: Path,
     max_file_mb: int,
     log_opts: list[str] | None = None,
+    extra: list[str] | None = None,
 ) -> list[str]:
     cmd = [
         gitleaks,
@@ -307,6 +310,8 @@ def build_gitleaks_command(
     ]
     if mode == "git" and log_opts:
         cmd += ["--log-opts", " ".join(log_opts)]
+    if extra:
+        cmd += extra
     return cmd
 
 
@@ -334,7 +339,7 @@ def run_scan(req: ScanRequest, settings: Settings, ruleset: Ruleset | None = Non
     deadline = started + req.timeout_seconds
     stats = SanitizeStats()
     try:
-        if req.mode not in ("dir", "git", "both"):
+        if req.mode not in ("dir", "git", "both", "staged"):
             raise SecretSentinelError(ErrorCode.VALIDATION_ERROR)
         ruleset = ruleset or load_ruleset()
         outcome.ruleset_version = ruleset.version
@@ -367,6 +372,16 @@ def run_scan(req: ScanRequest, settings: Settings, ruleset: Ruleset | None = Non
             else:
                 log_opts = _GIT_SAFE_LOG_OPTS + ["--full-history", "--all"]
                 scopes.append("full-history")
+        elif req.mode == "staged":
+            # Only what `git commit` would record now (the index), for pre-commit hooks.
+            git = resolve_executable(settings.git_path, ErrorCode.GIT_NOT_FOUND)
+            top = git_toplevel(git, req.target)
+            if top is None:
+                raise SecretSentinelError(ErrorCode.UNSUPPORTED_REPO)
+            if top != req.target:
+                raise SecretSentinelError(ErrorCode.UNSUPPORTED_REPO, "Staged scans require the repository root.")
+            outcome.commit_sha = git_head(git, req.target)  # None before the first commit
+            scopes.append("staged-changes")
         elif req.mode == "dir" and settings.git_path:
             try:
                 git = resolve_executable(settings.git_path, ErrorCode.GIT_NOT_FOUND)
@@ -387,11 +402,14 @@ def run_scan(req: ScanRequest, settings: Settings, ruleset: Ruleset | None = Non
             config_path.write_bytes(ruleset.effective_config(req.policy.exclude_paths).encode("utf-8"))
             os.chmod(config_path, 0o600)
             findings: list[SafeFinding] = []
-            for mode in [m for m in ("dir", "git") if req.mode in (m, "both")]:
+            if req.mode == "staged":
+                passes = [("git", None, STAGED_FLAGS)]
+            else:
+                passes = [(m, log_opts if m == "git" else None, None) for m in ("dir", "git") if req.mode in (m, "both")]
+            for mode, opts, extra in passes:
                 report_path = workdir / f"report-{mode}.json"
                 cmd = build_gitleaks_command(
-                    gitleaks, mode, config_path, report_path, ignore_dir, req.max_file_mb,
-                    log_opts if mode == "git" else None,
+                    gitleaks, mode, config_path, report_path, ignore_dir, req.max_file_mb, opts, extra,
                 )
                 rc = _run_gitleaks(cmd, req.target, workdir, deadline, req.cancel_event)
                 if rc not in (0, LEAK_EXIT_CODE):

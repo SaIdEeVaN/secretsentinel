@@ -246,3 +246,34 @@ def test_binary_and_unicode_files_do_not_break_scan(settings_factory, gitleaks_b
     (tmp_path / "long.txt").write_text("a" * 2_000_000)
     o = _scan(settings_factory(gitleaks_bin), tmp_path, "dir")
     assert o.status == "completed"
+
+
+# ---------------------------------------------------------------- staged (pre-commit)
+
+def test_staged_command_uses_pre_commit_flags(tmp_path):
+    from secretsentinel.services.scanner import STAGED_FLAGS, build_gitleaks_command
+
+    cmd = build_gitleaks_command("gitleaks", "git", tmp_path / "c.toml", tmp_path / "r.json", tmp_path, 10, None, STAGED_FLAGS)
+    assert cmd[1] == "git" and cmd[-2:] == ["--pre-commit", "--staged"]
+    assert "--redact=100" in cmd and "--log-opts" not in cmd
+
+
+def test_staged_mode_needs_repository_root(settings_factory, fake_gitleaks, git_repo):
+    (git_repo / "sub").mkdir()
+    fake_gitleaks.scenario("clean")
+    o = _scan(settings_factory(fake_gitleaks.path), (git_repo / "sub").resolve(), mode="staged")
+    assert o.status == "failed" and o.error_code == "UNSUPPORTED_REPO"
+
+
+@pytest.mark.gitleaks
+def test_staged_mode_scans_only_the_index(settings_factory, gitleaks_bin, git_repo):
+    s = settings_factory(gitleaks_bin)
+    (git_repo / "app.env").write_text(f"PRIVATE_KEY=0x{KEY}\n")
+    assert _scan(s, git_repo, "staged").total_findings == 0  # written but not staged
+    git(git_repo, "add", "app.env")
+    o = _scan(s, git_repo, "staged")
+    assert o.status == "completed" and o.policy_result == "fail" and o.scope == "staged-changes"
+    f = o.findings[0]
+    assert f.relative_path == "app.env" and f.sources == ("git",) and f.commit_sha is None
+    git(git_repo, "commit", "-q", "--no-verify", "-m", "leak")
+    assert _scan(s, git_repo, "staged").total_findings == 0  # committed: nothing staged any more

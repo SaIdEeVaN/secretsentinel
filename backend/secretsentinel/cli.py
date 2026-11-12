@@ -350,6 +350,25 @@ def cmd_db(args) -> int:
     return EXIT_USAGE
 
 
+def cmd_hook(args) -> int:
+    from .core.security import canonicalize_existing_dir
+    from .services import hook
+
+    try:
+        repo = canonicalize_existing_dir(args.path)
+        if args.hook_cmd == "install":
+            path = hook.install(repo)
+            print(f"Installed the pre-commit hook: {path}")
+            print("Each commit's staged changes are now scanned first. Skip once with: git commit --no-verify")
+        else:
+            path = hook.uninstall(repo)
+            print(f"Removed {path}" if path else "No pre-commit hook was installed.")
+    except SecretSentinelError as exc:
+        _err(f"[{exc.code.value}] {exc.message}")
+        return EXIT_USAGE
+    return EXIT_PASS
+
+
 def cmd_attest(args) -> int:
     from .services import attestation_cli
 
@@ -359,7 +378,10 @@ def cmd_attest(args) -> int:
 
 def _add_scan_options(p: argparse.ArgumentParser, include_mode: bool) -> None:
     if include_mode:
-        p.add_argument("--mode", choices=("dir", "git", "both"), default="both", help="scan scope (default: both)")
+        p.add_argument(
+            "--mode", choices=("dir", "git", "both", "staged"), default="both",
+            help="scan scope (default: both); 'staged' scans only the changes staged for the next commit",
+        )
     p.add_argument("path", help="local directory or repository root to scan")
     p.add_argument("--since", metavar="REF", help="git mode: only scan commits after REF (e.g. the PR base SHA)")
     p.add_argument("--fail-on", choices=FAIL_ON_LEVELS, help="minimum severity that blocks (default: policy file, FAIL_ON, or high)")
@@ -444,6 +466,13 @@ def build_parser() -> argparse.ArgumentParser:
     dprune = dbsub.add_parser("prune")
     dprune.add_argument("--days", type=int, required=True)
     db.set_defaults(func=cmd_db)
+
+    hookp = sub.add_parser("hook", help="install or remove a Git pre-commit hook that scans staged changes")
+    hsub = hookp.add_subparsers(dest="hook_cmd", required=True, parser_class=_Parser)
+    for name, help_text in (("install", "add the hook to a repository"), ("uninstall", "remove a hook added by SecretSentinel")):
+        hp = hsub.add_parser(name, help=help_text)
+        hp.add_argument("path", nargs="?", default=".", help="repository root (default: current directory)")
+    hookp.set_defaults(func=cmd_hook)
 
     attest = sub.add_parser("attest", help="(optional P2) signed scan attestations")
     asub = attest.add_subparsers(dest="attest_cmd", required=True, parser_class=_Parser)

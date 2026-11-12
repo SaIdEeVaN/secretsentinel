@@ -1,0 +1,10 @@
+# For the pre-commit framework (https://pre-commit.com). Needs `secretsentinel`
+# and Gitleaks on PATH. Without the framework: `secretsentinel hook install`.
+- id: secretsentinel
+  name: SecretSentinel (staged changes)
+  description: Block commits whose staged changes contain blocking secret findings. Matched values are redacted.
+  entry: secretsentinel check . --mode staged --no-size-limit
+  language: system
+  pass_filenames: false
+  always_run: true
+  stages: [pre-commit]

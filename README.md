@@ -105,6 +105,25 @@ the database. Use `--help` to see modes, scope, policy and output options.
 Exit codes: **0** policy passed, **1** blocking findings, **2** invalid input or
 policy, **3** scanner/process error. Every nonzero exit fails a CI check.
 
+### Pre-commit hook
+
+Stop a secret before it is committed. In each repository, run once:
+
+```powershell
+.\.venv\Scripts\python.exe -m secretsentinel hook install C:\path\to\your-repo
+```
+
+Every `git commit` then scans only the **staged** changes (`check --mode
+staged`) with the same rules, redaction and `.secretsentinel.yml` policy, and
+refuses the commit on blocking findings - or if the scan cannot run (it fails
+closed). Install it from a shell where `GITLEAKS_PATH` is set: the hook keeps
+that value, so commits from an editor still find Gitleaks. Skip it once,
+deliberately, with `git commit --no-verify`; remove it with
+`secretsentinel hook uninstall`. A hook that SecretSentinel did not write is
+never overwritten. If you use the [pre-commit](https://pre-commit.com)
+framework instead, this repository ships a `.pre-commit-hooks.yaml` entry
+(`id: secretsentinel`; needs `secretsentinel` and Gitleaks on PATH).
+
 ## Configuration and policy
 
 See [.env.example](.env.example) for all supported settings. In local mode no
