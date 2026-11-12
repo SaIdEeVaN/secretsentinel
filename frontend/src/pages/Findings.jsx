@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client.js";
 import FindingTable from "../components/FindingTable.jsx";
 import { EmptyState, ErrorState, Loading } from "../components/States.jsx";
-import { Field, PageHeader, Pagination } from "../components/Widgets.jsx";
+import { ChipGroup, Field, PageHeader, Pagination } from "../components/Widgets.jsx";
 import { MODE_LABEL } from "../components/format.js";
 import { useAsync } from "../hooks/useAsync.js";
 import { FindingDetailPanel } from "./FindingDetail.jsx";
@@ -11,29 +11,47 @@ import { FindingDetailPanel } from "./FindingDetail.jsx";
 const SEVERITY_CHIPS = [["critical", "Critical"], ["high", "High"], ["medium", "Medium"], ["low", "Low"]];
 const STATUS_CHIPS = [["open", "Open"], ["acknowledged", "Acknowledged"], ["resolved", "Resolved"], ["suppressed", "Suppressed"]];
 
-function sum(counts) {
-  return counts ? Object.values(counts).reduce((a, b) => a + b, 0) : null;
-}
+const BULK = [["open", "Open"], ["acknowledged", "Acknowledged"], ["resolved", "Resolved"]];
 
-/** A joined row of toggle buttons with optional counts (design: segmented filter). */
-function ChipGroup({ label, options, value, counts, onChange }) {
-  const all = [["", "All", sum(counts)], ...options.map(([v, l]) => [v, l, counts ? counts[v] ?? 0 : null])];
+/** Apply one status to several findings, one audited PATCH at a time. */
+function BulkBar({ ids, onDone, onClear }) {
+  const [busy, setBusy] = useState(null);
+  const apply = async (status) => {
+    setBusy(status);
+    let ok = 0;
+    const failed = [];
+    for (const id of ids) {
+      try {
+        await api.updateFinding(id, status);
+        ok += 1;
+      } catch (err) {
+        failed.push(err);
+      }
+    }
+    setBusy(null);
+    onDone({ ok, failed: failed.length, status, message: failed[0]?.message });
+  };
   return (
-    <div role="group" aria-label={label} className="flex flex-wrap overflow-hidden rounded-md border border-line">
-      {all.map(([v, l, n]) => (
-        <button
-          key={v || "all"}
-          type="button"
-          aria-pressed={value === v}
-          onClick={() => onChange(v)}
-          className={`min-h-8 border-r border-line px-2.5 py-1.5 text-xs last:border-r-0 ${
-            value === v ? "bg-surface-2 font-semibold text-ink" : "text-muted hover:text-ink"
-          }`}
-        >
-          {l}
-          {n != null && <span className="mono ml-1.5 text-faint">{n}</span>}
-        </button>
-      ))}
+    <div role="region" aria-label="Bulk triage" className="card mb-3 flex flex-wrap items-center gap-2 p-2.5 text-sm">
+      <span className="font-medium">{ids.length} selected</span>
+      <span className="text-muted">· Mark as</span>
+      <div className="flex overflow-hidden rounded-md border border-line">
+        {BULK.map(([v, l]) => (
+          <button
+            key={v}
+            type="button"
+            disabled={Boolean(busy)}
+            onClick={() => apply(v)}
+            className="min-h-8 border-r border-line px-2.5 py-1 text-xs last:border-r-0 hover:bg-surface-2 disabled:opacity-60"
+          >
+            {busy === v ? "Saving…" : l}
+          </button>
+        ))}
+      </div>
+      <button type="button" className="btn btn-ghost text-xs" onClick={onClear} disabled={Boolean(busy)}>
+        Clear selection
+      </button>
+      <span className="text-[11px] text-faint">Each change is recorded in the audit trail. Mark resolved only after the response is done.</span>
     </div>
   );
 }
@@ -45,6 +63,8 @@ export default function Findings() {
   const [filters, setFilters] = useState(EMPTY);
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(null);
+  const [checked, setChecked] = useState(() => new Set());
+  const [bulkResult, setBulkResult] = useState(null);
   const repos = useAsync(() => api.repositories(), []);
   const rules = useAsync(() => api.rules(), []);
   const list = useAsync(() => api.findings({ ...filters, page, page_size: 25 }), [filters, page]);
@@ -56,6 +76,17 @@ export default function Findings() {
     setFilters((f) => ({ ...f, [k]: v }));
   };
   const set = (k) => (e) => choose(k, e.target.value);
+  // A selection only makes sense for the rows on screen.
+  useEffect(() => {
+    setChecked(new Set());
+    setBulkResult(null);
+  }, [filters, page]);
+  const check = (ids, on) =>
+    setChecked((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) (on ? next.add(id) : next.delete(id));
+      return next;
+    });
   const refresh = () => {
     list.reload();
     facets.reload();
@@ -145,9 +176,33 @@ export default function Findings() {
               A clean result means no rule matched in the scanned scope; it is not a guarantee that no secrets exist.
             </EmptyState>
           )}
+          {bulkResult && (
+            <p role="status" className={`mb-3 text-xs ${bulkResult.failed ? "text-warn" : "text-ok"}`}>
+              Marked {bulkResult.ok} finding{bulkResult.ok === 1 ? "" : "s"} as {bulkResult.status}
+              {bulkResult.failed ? `; ${bulkResult.failed} could not be changed (${bulkResult.message || "error"}).` : "."}
+            </p>
+          )}
+          {checked.size > 0 && !selected && (
+            <BulkBar
+              ids={[...checked]}
+              onDone={(result) => {
+                setBulkResult(result);
+                setChecked(new Set());
+                refresh();
+              }}
+              onClear={() => setChecked(new Set())}
+            />
+          )}
           {list.data && list.data.items.length > 0 && (
             <div className="card">
-              <FindingTable findings={list.data.items} onSelect={select} selectedId={selected} compact={Boolean(selected)} />
+              <FindingTable
+                findings={list.data.items}
+                onSelect={select}
+                selectedId={selected}
+                compact={Boolean(selected)}
+                checked={selected ? undefined : checked}
+                onCheck={selected ? undefined : check}
+              />
               <Pagination page={page} pageSize={25} total={list.data.total} onPage={setPage} />
             </div>
           )}

@@ -152,3 +152,30 @@ export function KeyValue({ items, rows = false }) {
     </dl>
   );
 }
+
+function sum(counts) {
+  return counts ? Object.values(counts).reduce((a, b) => a + b, 0) : null;
+}
+
+/** A joined row of toggle buttons with optional counts (design: segmented filter). */
+export function ChipGroup({ label, options, value, counts, onChange }) {
+  const all = [["", "All", sum(counts)], ...options.map(([v, l]) => [v, l, counts ? counts[v] ?? 0 : null])];
+  return (
+    <div role="group" aria-label={label} className="flex flex-wrap overflow-hidden rounded-md border border-line">
+      {all.map(([v, l, n]) => (
+        <button
+          key={v || "all"}
+          type="button"
+          aria-pressed={value === v}
+          onClick={() => onChange(v)}
+          className={`min-h-8 border-r border-line px-2.5 py-1.5 text-xs last:border-r-0 ${
+            value === v ? "bg-surface-2 font-semibold text-ink" : "text-muted hover:text-ink"
+          }`}
+        >
+          {l}
+          {n != null && <span className="mono ml-1.5 text-faint">{n}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}

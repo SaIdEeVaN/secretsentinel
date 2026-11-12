@@ -23,8 +23,15 @@ export function StatusTag({ finding }) {
  * Renders ONLY sanitized metadata. There is deliberately no column, tooltip
  * or button that could show a secret value - the API never returns one.
  */
-export default function FindingTable({ findings, onSelect, selectedId, showRepo = true, compact = false }) {
+/** Suppressed findings change status only through their suppression. */
+export const canTriage = (f) => f.status !== "suppressed";
+
+export default function FindingTable({ findings, onSelect, selectedId, showRepo = true, compact = false, checked, onCheck }) {
   const repoCol = showRepo && !compact;
+  const selectable = Boolean(checked && onCheck);
+  const eligible = findings.filter(canTriage);
+  const allChecked = selectable && eligible.length > 0 && eligible.every((f) => checked.has(f.id));
+  const toggleAll = () => onCheck(eligible.map((f) => f.id), !allChecked);
   const activate = (f) => onSelect && onSelect(f);
   const onKey = (e, f) => {
     if (e.key === "Enter" || e.key === " ") {
@@ -39,6 +46,17 @@ export default function FindingTable({ findings, onSelect, selectedId, showRepo 
         <table className="table">
           <thead>
             <tr>
+              {selectable && (
+                <th scope="col" className="w-8">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all findings on this page"
+                    checked={allChecked}
+                    disabled={eligible.length === 0}
+                    onChange={toggleAll}
+                  />
+                </th>
+              )}
               <th scope="col">Severity</th>
               <th scope="col">Finding</th>
               <th scope="col">Location</th>
@@ -57,6 +75,18 @@ export default function FindingTable({ findings, onSelect, selectedId, showRepo 
                 onClick={() => activate(f)}
                 onKeyDown={(e) => onKey(e, f)}
               >
+                {selectable && (
+                  <td className="w-8" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${f.title} at ${location(f)}`}
+                      title={canTriage(f) ? undefined : "Suppressed: change it through its suppression"}
+                      checked={checked.has(f.id)}
+                      disabled={!canTriage(f)}
+                      onChange={() => onCheck([f.id], !checked.has(f.id))}
+                    />
+                  </td>
+                )}
                 <td>
                   <SeverityBadge severity={f.severity} />
                 </td>
@@ -84,10 +114,20 @@ export default function FindingTable({ findings, onSelect, selectedId, showRepo 
       {/* Stacked cards on phones */}
       <ul className="md:hidden divide-y divide-line">
         {findings.map((f) => (
-          <li key={f.id}>
+          <li key={f.id} className={selectable ? "flex items-start" : undefined}>
+            {selectable && (
+              <input
+                type="checkbox"
+                className="ml-3 mt-4 shrink-0"
+                aria-label={`Select ${f.title} at ${location(f)}`}
+                checked={checked.has(f.id)}
+                disabled={!canTriage(f)}
+                onChange={() => onCheck([f.id], !checked.has(f.id))}
+              />
+            )}
             <button
               type="button"
-              className={`w-full text-left p-3 ${selectedId === f.id ? "bg-surface-2" : ""}`}
+              className={`w-full min-w-0 text-left p-3 ${selectedId === f.id ? "bg-surface-2" : ""}`}
               onClick={() => activate(f)}
             >
               <div className="flex items-center justify-between gap-2">

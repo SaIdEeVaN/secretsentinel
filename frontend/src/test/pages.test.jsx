@@ -246,3 +246,58 @@ describe("Overview posture", () => {
     expect(await screen.findByText("The repository has blocking findings in its latest scan.")).toBeInTheDocument();
   });
 });
+
+describe("Findings bulk triage", () => {
+  const A = finding({ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", relative_path: "a.env" });
+  const B = finding({ id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", relative_path: "b.env" });
+  const S = finding({ id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", relative_path: "s.env", status: "suppressed", suppression_id: "db-1", blocking: false });
+  const base = {
+    "GET /repositories": [], "GET /rules": { rules: [] },
+    "GET /findings": { items: [A, B, S], total: 3, page: 1, page_size: 25 },
+  };
+  const box = (path) => screen.getAllByRole("checkbox", { name: new RegExp(`at ${path.replace(".", "\\.")}:`) })[0];
+
+  it("selects without opening the finding, and select-all skips suppressed findings", async () => {
+    mockApi(base);
+    renderAt("/findings", <Findings />);
+    await screen.findAllByText("Potential EVM signing secret");
+    await userEvent.click(box("a.env"));
+    expect(screen.getByRole("region", { name: "Bulk triage" })).toHaveTextContent("1 selected");
+    expect(screen.queryByText("elsewhere")).not.toBeInTheDocument();
+    expect(box("s.env")).toBeDisabled();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Select all findings on this page" }));
+    expect(screen.getByRole("region", { name: "Bulk triage" })).toHaveTextContent("2 selected");
+  });
+
+  it("marks every selected finding through the audited endpoint and reports the result", async () => {
+    const { calls } = mockApi({
+      ...base,
+      [`PATCH /findings/${A.id}`]: { ...A, status: "acknowledged" },
+      [`PATCH /findings/${B.id}`]: { ...B, status: "acknowledged" },
+    });
+    renderAt("/findings", <Findings />);
+    await screen.findAllByText("Potential EVM signing secret");
+    await userEvent.click(box("a.env"));
+    await userEvent.click(box("b.env"));
+    await userEvent.click(within(screen.getByRole("region", { name: "Bulk triage" })).getByRole("button", { name: "Acknowledged" }));
+    expect(await screen.findByText("Marked 2 findings as acknowledged.")).toBeInTheDocument();
+    const patches = calls.filter((c) => c.method === "PATCH");
+    expect(patches.map((c) => c.path).sort()).toEqual([`/findings/${A.id}`, `/findings/${B.id}`]);
+    expect(patches.every((c) => JSON.parse(c.init.body).status === "acknowledged")).toBe(true);
+    expect(screen.queryByRole("region", { name: "Bulk triage" })).not.toBeInTheDocument();
+  });
+
+  it("reports findings that could not be changed", async () => {
+    mockApi({
+      ...base,
+      [`PATCH /findings/${A.id}`]: { ...A, status: "resolved" },
+      [`PATCH /findings/${B.id}`]: { __status: 409, body: { error: { code: "INVALID_STATE", message: "Deactivate the suppression first." } } },
+    });
+    renderAt("/findings", <Findings />);
+    await screen.findAllByText("Potential EVM signing secret");
+    await userEvent.click(box("a.env"));
+    await userEvent.click(box("b.env"));
+    await userEvent.click(within(screen.getByRole("region", { name: "Bulk triage" })).getByRole("button", { name: "Resolved" }));
+    expect(await screen.findByText(/Marked 1 finding as resolved; 1 could not be changed/)).toBeInTheDocument();
+  });
+});
