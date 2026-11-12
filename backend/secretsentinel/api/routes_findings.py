@@ -139,6 +139,23 @@ def finding_facets(
     )
 
 
+def _suppression_info(session: Session, f: Finding) -> dict | None:
+    """Reason, reviewer and expiry for a dashboard suppression ("db-<id prefix>")."""
+    if not f.suppression_id:
+        return None
+    info = {"id": f.suppression_id, "origin": "policy"}
+    if f.suppression_id.startswith("db-") and len(f.suppression_id) > 3:
+        row = session.scalars(
+            select(Suppression)
+            .where(Suppression.repository_id == f.repository_id, Suppression.id.startswith(f.suppression_id[3:]))
+            .order_by(Suppression.created_at.desc())
+            .limit(1)
+        ).first()
+        if row is not None:
+            info.update(origin="dashboard", reason=row.reason, reviewer=row.reviewer, expires_at=row.expires_at, active=row.active)
+    return info
+
+
 def _detail(session: Session, f: Finding) -> dict:
     scan = session.get(Scan, f.scan_id)
     repo = session.get(Repository, f.repository_id)
@@ -167,6 +184,7 @@ def _detail(session: Session, f: Finding) -> dict:
     base = finding_out(f, scan.mode if scan else "", repo.display_name if repo else "")
     return FindingDetail(
         **base,
+        suppression=_suppression_info(session, f),
         remediation=get_remediation(f.remediation_key).as_dict(),
         rule_description=description,
         still_detected=still,

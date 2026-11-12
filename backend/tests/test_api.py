@@ -211,6 +211,25 @@ def test_suppression_requires_review_fields(client, root, fake_gitleaks):
     assert scan["policy_result"] == "fail"
 
 
+def test_finding_detail_explains_its_suppression(client, root, fake_gitleaks):
+    fake_gitleaks.records([raw_record(HEX64)])
+    repo_id = _register(client, root)
+    _wait(client, client.post("/api/v1/scans", json={"repository_id": repo_id, "mode": "dir"}).json()["scan_id"])
+    fid = client.get("/api/v1/findings").json()["items"][0]["id"]
+    assert client.get(f"/api/v1/findings/{fid}").json()["suppression"] is None
+    expires = (date.today() + timedelta(days=30)).isoformat()
+    sup = client.post("/api/v1/suppressions", json={"finding_id": fid, "reason": "Reviewed synthetic value", "reviewer": "alice",
+                                                     "expires_at": expires})
+    assert sup.status_code == 201
+    info = client.get(f"/api/v1/findings/{fid}").json()["suppression"]
+    assert info == {"id": f"db-{sup.json()['id'][:8]}", "origin": "dashboard", "reason": "Reviewed synthetic value",
+                    "reviewer": "alice", "expires_at": expires, "active": True}
+    # the next scan's copy of the finding is suppressed by the same entry
+    scan = _wait(client, client.post("/api/v1/scans", json={"repository_id": repo_id, "mode": "dir"}).json()["scan_id"])
+    again = client.get(f"/api/v1/scans/{scan['id']}/findings").json()["items"][0]
+    assert client.get(f"/api/v1/findings/{again['id']}").json()["suppression"]["reviewer"] == "alice"
+
+
 def test_metrics_overview(client, root, fake_gitleaks):
     fake_gitleaks.records([raw_record(HEX64)])
     repo_id = _register(client, root)

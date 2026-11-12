@@ -133,3 +133,39 @@ describe("Findings with the side panel", () => {
     await waitFor(() => expect(screen.queryByText("finding 11111111")).not.toBeInTheDocument());
   });
 });
+
+describe("Suppression details", () => {
+  const suppressed = (suppression) => ({ ...DETAIL, status: "suppressed", blocking: false, suppression_id: "db-1a2b3c4d", suppression });
+
+  it("shows reason, expiry and reviewer of a dashboard suppression", async () => {
+    mockApi({
+      [`GET /findings/${ID}`]: suppressed({ id: "db-1a2b3c4d", origin: "dashboard", reason: "Synthetic test fixture", reviewer: "alice", expires_at: "2099-01-01", active: true }),
+      "GET /audit-events": [],
+    });
+    panel();
+    const box = await screen.findByLabelText("Suppression");
+    expect(box).toHaveTextContent("Synthetic test fixture");
+    expect(box).toHaveTextContent("2099-01-01");
+    expect(box).toHaveTextContent("alice");
+    expect(screen.queryByRole("group", { name: "Set status" })).not.toBeInTheDocument();
+  });
+
+  it("flags an expired dashboard suppression", async () => {
+    mockApi({
+      [`GET /findings/${ID}`]: suppressed({ id: "db-1a2b3c4d", origin: "dashboard", reason: "Old reason", reviewer: "bob", expires_at: "2020-01-01", active: true }),
+      "GET /audit-events": [],
+    });
+    panel();
+    expect(await screen.findByText(/expired: it no longer applies/)).toBeInTheDocument();
+  });
+
+  it("names the policy file entry when the suppression came from .secretsentinel.yml", async () => {
+    mockApi({
+      [`GET /findings/${ID}`]: { ...suppressed({ id: "baseline-1", origin: "policy" }), suppression_id: "baseline-1" },
+      "GET /audit-events": [],
+    });
+    panel();
+    expect(await screen.findByText("baseline-1")).toBeInTheDocument();
+    expect(screen.getByText(/\.secretsentinel\.yml/)).toBeInTheDocument();
+  });
+});

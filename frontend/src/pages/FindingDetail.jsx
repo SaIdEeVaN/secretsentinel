@@ -73,6 +73,45 @@ function describeEvent(e) {
   return e.action.replace(/[._]/g, " ");
 }
 
+/** Why a finding is suppressed: reviewed dashboard entry, or a policy-file entry. */
+export function SuppressionDetails({ finding }) {
+  const s = finding.suppression;
+  const today = new Date().toISOString().slice(0, 10);
+  const expired = s?.expires_at && s.expires_at < today;
+  return (
+    <div className="mt-1 space-y-2">
+      {s?.origin === "dashboard" ? (
+        <dl className="grid grid-cols-[72px_minmax(0,1fr)] gap-x-2.5 gap-y-1 rounded-md border border-line p-2.5 text-xs" aria-label="Suppression">
+          <dt className="text-faint">Reason</dt>
+          <dd className="break-words">{s.reason}</dd>
+          <dt className="text-faint">Expires</dt>
+          <dd className={expired ? "text-warn" : undefined}>
+            {s.expires_at}
+            {expired ? " (expired: it no longer applies to new scans)" : ""}
+          </dd>
+          <dt className="text-faint">Reviewer</dt>
+          <dd className="break-words">{s.reviewer}</dd>
+        </dl>
+      ) : (
+        <p className="text-xs text-muted">
+          Suppressed by the policy file entry <span className="mono">{finding.suppression_id}</span> (a reviewed entry in the
+          repository's <span className="mono">.secretsentinel.yml</span>).
+        </p>
+      )}
+      {s?.origin === "dashboard" && s.active === false && (
+        <p className="text-xs text-warn">This suppression was deactivated; the next scan reports the finding again.</p>
+      )}
+      <p className="text-xs text-muted">
+        Manage suppressions on{" "}
+        <Link className="text-accent underline" to="/rules">
+          Rules & Policy
+        </Link>
+        .
+      </p>
+    </div>
+  );
+}
+
 /** A section: a plain captioned block in the side panel, a card on the full page. */
 function Block({ id, title, compact, children }) {
   if (compact) {
@@ -199,13 +238,7 @@ export function FindingDetailPanel({ findingId, onChanged, onClose, compact = fa
 
         <Block id="triage-h" title="Triage status" compact={compact}>
           {f.status === "suppressed" ? (
-            <p className="mt-1 text-sm text-muted">
-              Suppressed by <span className="mono">{f.suppression_id}</span>. Manage suppressions on{" "}
-              <Link className="text-accent underline" to="/rules">
-                Rules & Policy
-              </Link>
-              .
-            </p>
+            <SuppressionDetails finding={f} />
           ) : (
             <>
               {compact ? (

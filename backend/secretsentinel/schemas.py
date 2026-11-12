@@ -163,12 +163,24 @@ class FindingFacets(BaseModel):
     status: dict[str, int]
 
 
+class SuppressionInfo(BaseModel):
+    """Why a finding is suppressed. Policy-file entries are only identified by id here."""
+
+    id: str
+    origin: Literal["dashboard", "policy"]
+    reason: str | None = None
+    reviewer: str | None = None
+    expires_at: date | None = None
+    active: bool | None = None
+
+
 class FindingDetail(FindingOut):
     remediation: RemediationOut
     rule_description: str | None
     still_detected: bool
     latest_scan_id: str | None
     occurrences: int
+    suppression: SuppressionInfo | None = None
 
 
 class FindingUpdate(StrictModel):
