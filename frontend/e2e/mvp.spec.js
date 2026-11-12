@@ -71,6 +71,9 @@ test("a blocking leak can be removed and rescanned without leaking values to the
   await page.getByRole("button", { name: "Download report" }).click();
   unlinkSync(join(folder, ".env"));
   await page.getByRole("link", { name: "Rescan", exact: true }).click();
+  // Wait until the form has loaded the repository list (as on the first scan): choosing the
+  // mode while the page is still shifting can make the forced click miss the hidden radio.
+  await expect(page.getByRole("button", { name: "Start scan", exact: true })).toBeEnabled();
   await page.locator('input[name="mode"][value="dir"]').check({ force: true });
   await finishScan(page);
   await expect(page.getByText("No matching secrets detected in the scanned scope.")).toBeVisible();
