@@ -51,6 +51,9 @@ DEV_MNEMONIC = " ".join(["test"] * 11 + ["junk"])
 
 _DOMAIN = b"secretsentinel-synthetic-fixture-v1:"
 
+# A prefix/suffix fragment needs at least this many different characters to count as a canary.
+MIN_DISTINCT_CHARS = 8
+
 
 def _stream(kind: str, label: str, n: int) -> bytes:
     """Return ``n`` deterministic pseudo-random bytes for ``kind``/``label``."""
@@ -181,8 +184,11 @@ def canary_fragments(canaries: set[str]) -> set[str]:
     for value in canaries:
         fragments.add(value)
         if len(value) >= 24 and value != DEV_MNEMONIC:
-            fragments.add(value[:20])
-            fragments.add(value[-20:])
+            for part in (value[:20], value[-20:]):
+                # A repeated-character run (a token that starts with 21 "A"s) is not a
+                # distinctive fragment: it would flag any file that merely contains such a run.
+                if len(set(part)) >= MIN_DISTINCT_CHARS:
+                    fragments.add(part)
     return fragments
 
 

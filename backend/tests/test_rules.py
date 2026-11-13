@@ -18,7 +18,7 @@ from secretsentinel.services.scanner import ScanRequest, run_scan
 
 RULES_DIR = find_rules_dir()
 # Custom rules that are not Web3 rules: gaps in the Gitleaks defaults for ordinary service tokens.
-SERVICE_RULE_PREFIXES = ("twitter-",)
+SERVICE_RULE_PREFIXES = ("twitter-", "url-")
 GO_UNSUPPORTED = [r"\(\?=", r"\(\?!", r"\(\?<=", r"\(\?<!", r"\\[1-9]", r"\(\?P=", r"\(\?>"]
 
 
@@ -257,6 +257,16 @@ def test_twitter_bearer_in_other_common_shapes(tmp_path, gitleaks_bin):
 
 
 @pytest.mark.gitleaks
+@pytest.mark.parametrize("terminator", [",", ")", "]", "}", ">", "&limit=10", "|", ""])
+def test_twitter_bearer_followed_by_common_delimiters(tmp_path, gitleaks_bin, terminator):
+    from secretsentinel.fixtures import synth
+
+    tok = synth("twitter_bearer21", "rules-test-delims")
+    found = _scan_text_files(tmp_path, gitleaks_bin, {"d.txt": f"TWITTER_API_TOKEN={tok}{terminator}\n"})
+    assert any(f.rule_id == "twitter-bearer-token-short-prefix" and f.blocking for f in found.get("d.txt", [])), terminator
+
+
+@pytest.mark.gitleaks
 def test_twitter_bearer_rule_ignores_lookalikes(tmp_path, gitleaks_bin):
     from secretsentinel.fixtures import synth
 
@@ -274,3 +284,39 @@ def test_twitter_bearer_rule_ignores_lookalikes(tmp_path, gitleaks_bin):
     found = _scan_text_files(tmp_path, gitleaks_bin, files)
     for name in files:
         assert "twitter-bearer-token-short-prefix" not in {f.rule_id for f in found.get(name, [])}, name
+
+
+# --------------------------------------------------------------------------
+# Credentials in URL query strings. The default keyword rules only accept an
+# unquoted value followed by a quote, whitespace or ";", so "?api_key=VALUE&..."
+# was missed (found by the rule audit, docs/RULE_AUDIT.md).
+# --------------------------------------------------------------------------
+
+@pytest.mark.gitleaks
+@pytest.mark.parametrize("terminator", ["&limit=10", ")", ",", "]", "}", ">", "#frag", ""])
+def test_url_query_credential_followed_by_common_delimiters(tmp_path, gitleaks_bin, terminator):
+    from secretsentinel.fixtures import synth
+
+    value = synth("alnum32", "rules-test-url-query")
+    found = _scan_text_files(tmp_path, gitleaks_bin, {"u.txt": f"fetch https://api.example.test/v1/items?api_key={value}{terminator}\n"})
+    ids = {f.rule_id for f in found.get("u.txt", [])}
+    assert "url-query-credential" in ids, terminator
+    finding = next(f for f in found["u.txt"] if f.rule_id == "url-query-credential")
+    assert finding.severity == "medium" and not finding.blocking
+
+
+@pytest.mark.gitleaks
+def test_url_query_credential_ignores_placeholders_and_lookalikes(tmp_path, gitleaks_bin):
+    from secretsentinel.fixtures import synth
+
+    value = synth("alnum32", "rules-test-url-query-lookalike")
+    files = {
+        "name.txt": f"https://api.example.test/v1?page_token={value}&x=1\n",            # not a credential-named parameter
+        "short.txt": "https://api.example.test/v1?token=abc123&x=1\n",                   # too short
+        "flat.txt": "https://api.example.test/v1?access_token=" + "a" * 28 + "&x=1\n",   # no entropy
+        "ref.txt": "https://api.example.test/v1?token=${SERVICE_TOKEN_FROM_ENVIRONMENT}&x=1\n",
+        "placeholder.txt": "https://api.example.test/v1?api_key=<your-api-key-goes-here>&x=1\n",
+    }
+    found = _scan_text_files(tmp_path, gitleaks_bin, files)
+    for name in files:
+        assert "url-query-credential" not in {f.rule_id for f in found.get(name, [])}, name

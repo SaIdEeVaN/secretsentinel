@@ -196,6 +196,7 @@ interpreter; the browser runner otherwise uses `.venv`, then `python`.
 - [Architecture and API](docs/ARCHITECTURE.md)
 - [Security model and limitations](docs/SECURITY.md)
 - [Threat model (PRD section 16)](docs/THREAT_MODEL.md)
+- [Detection rule audit: near-miss gaps and how to re-run the check](docs/RULE_AUDIT.md)
 - [Test plan and PRD test-case matrix](docs/TEST_PLAN.md)
 - [Synthetic demonstration](docs/DEMO.md)
 - [Local validation results and remaining external checks](docs/VALIDATION.md)

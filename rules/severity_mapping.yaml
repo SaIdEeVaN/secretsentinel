@@ -168,6 +168,13 @@ rules:
     family: service-credential
     remediation_key: ROTATE_API_TOKEN
 
+  url-query-credential:
+    title: Credential in a URL query string
+    severity: medium
+    confidence: medium
+    family: generic-secret
+    remediation_key: REVIEW_GENERIC_SECRET
+
   # ---- SecretSentinel policy checks (not Gitleaks rules) -----------------
   secretsentinel-gitleaksignore-present:
     title: Repository .gitleaksignore can hide findings from the gate

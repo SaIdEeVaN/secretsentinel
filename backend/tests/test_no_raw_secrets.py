@@ -74,3 +74,15 @@ def test_api_and_db_contain_no_canaries(gitleaks_bin, fixture_root, canaries, tm
     _assert_clean("\n".join(bodies), canaries, "API responses")
     _assert_clean("\n".join(sqlite3.connect(db).iterdump()), canaries, "SQLite dump")
     _assert_clean("\n".join(r.getMessage() + str(getattr(r, "ss", "")) for r in caplog.records), canaries, "logs")
+
+
+def test_repeated_character_runs_are_not_canary_fragments():
+    """The synthetic Twitter token starts with 21 "A"s; 20 "A"s on their own must not look like a leak."""
+    from secretsentinel.fixtures import canary_fragments, find_leaks, synth
+
+    value = synth("twitter_bearer21", "fragment-test")
+    fragments = canary_fragments({value})
+    assert value in fragments and value[-20:] in fragments
+    assert value[:20] not in fragments
+    assert find_leaks("x" * 5 + "A" * 40, {value}) == []
+    assert find_leaks(f"log {value} end", {value})  # the whole value is still caught

@@ -220,16 +220,30 @@ tags = ["web3", "keystore", "W3-05"]
 # Twitter/X app-only bearer tokens are also issued with 21. This rule accepts a
 # longer run of leading "A"s next to a Twitter/X identifier or a Bearer prefix.
 # The context part is case-insensitive; the token itself is case-sensitive.
+# It also accepts "," ")" "]" "}" ">" "&" "|" "<" after the token, which the default rule does not.
 # A token matched by both rules is reported once (also_matched merges them).
 # ---------------------------------------------------------------------------
 [[rules]]
 id = "twitter-bearer-token-short-prefix"
 description = "Twitter/X app-only bearer token with a 21-character 'A' prefix (missed by the default rule)"
-regex = '''(?i:(?:[\w.-]{0,50}?(?:twitter|x[_-]?(?:api|bearer))[\w.\- \t]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\|:|<=|=>|:|\?=)[\x60'"\s=]{0,5}|\bbearer[ \t]+["'\x60]?))(A{18}[a-zA-Z0-9%]{80,110})(?:[\x60'"\s;]|\\[nr]|$)'''
+regex = '''(?i:(?:[\w.-]{0,50}?(?:twitter|x[_-]?(?:api|bearer))[\w.\- \t]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\|:|<=|=>|:|\?=)[\x60'"\s=]{0,5}|\bbearer[ \t]+["'\x60]?))(A{18}[a-zA-Z0-9%]{80,110})(?:[\x60'"\s;,)\]}>&|<]|\\[nr]|$)'''
 secretGroup = 1
 entropy = 3.0
 keywords = ["twitter", "x_api", "x-api", "xapi", "x_bearer", "x-bearer", "xbearer", "bearer"]
 tags = ["twitter", "bearer-token", "service-token"]
+
+# The default keyword rules only accept an unquoted value that is followed by a quote,
+# whitespace, ";" or the end of the line. A credential in a URL query string
+# ("?api_key=VALUE&limit=10") or followed by "," ")" "]" "}" is therefore missed.
+# This rule covers the query-string case for credential-named parameters.
+[[rules]]
+id = "url-query-credential"
+description = "Credential-named URL query parameter with a long, high-entropy value (missed by the default rules when followed by '&')"
+regex = '''(?i)[?&](?:api[_-]?key|apikey|access[_-]?token|auth[_-]?token|client[_-]?secret|secret(?:[_-]?key)?|token|passw(?:or)?d|pwd)=([A-Za-z0-9_\-.~%+/]{20,200})(?:[&#\x60'"\s;)\]}>,<|]|\\[nr]|$)'''
+secretGroup = 1
+entropy = 3.5
+keywords = ["api_key", "api-key", "apikey", "access_token", "access-token", "auth_token", "auth-token", "client_secret", "client-secret", "secret", "token", "passwd", "password", "pwd"]
+tags = ["url", "query-string", "service-token"]
 
 # ---------------------------------------------------------------------------
 # False-positive controls layered onto Gitleaks DEFAULT rules.
