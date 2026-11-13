@@ -138,7 +138,7 @@ repositories need no files or settings of their own:
    and push to `main`.
 
 `dashboard-fleet.yml` then scans every listed repository (working tree and
-full history) on that push, every Monday, and whenever you run **Actions →
+full history) on that push, every day (05:23 UTC), and whenever you run **Actions →
 Scan repository list for SecretSentinel dashboard → Run workflow**. Each
 repository is its own job, so one failing repository doesn't stop the others.
 The scanner only reads the listed repositories; it never runs their code. A
@@ -188,8 +188,8 @@ GitHub's own "workflow run failed" email is the alert. Known findings that are
 still present do not fail it again; check those on the dashboard.
 
 - Make sure the email is on: GitHub → your avatar → Settings → Notifications,
-  the **Actions** section: email for failed workflow runs. For the weekly
-  schedule, GitHub notifies the person who last changed the schedule line.
+  the **Actions** section: email for failed workflow runs. For the scheduled
+  run, GitHub notifies the person who last changed the schedule line.
 - The alert is deliberately not a GitHub issue: issues and run logs of a
   public repository are public, and a list of file locations would point
   others at possibly real secrets. Logs show counts only; details stay on the

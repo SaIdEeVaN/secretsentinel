@@ -8,7 +8,7 @@ name: Scan repository list for SecretSentinel dashboard
 # The listed repositories need no files or settings of their own. Their code is
 # only read by the scanner; nothing from them is executed.
 #
-# Trust model: runs ONLY from main (push that changes the list, weekly
+# Trust model: runs ONLY from main (push that changes the list, daily
 # schedule, manual run) - never for pull requests - and the upload token lives
 # in the "secretsentinel-dashboard" environment, restricted to main.
 #
@@ -27,7 +27,7 @@ on:
       - .github/dashboard-repos.txt
       - .github/workflows/dashboard-fleet.yml
   schedule:
-    - cron: "23 5 * * 1"
+    - cron: "23 5 * * *" # daily, 05:23 UTC
   workflow_dispatch:
 
 permissions:
