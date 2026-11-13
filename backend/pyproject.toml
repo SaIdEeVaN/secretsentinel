@@ -12,8 +12,14 @@ requires-python = ">=3.11"
 authors = [{ name = "SecretSentinel contributors" }]
 keywords = ["security", "secrets", "gitleaks", "devsecops", "web3"]
 classifiers = [
-  "Programming Language :: Python :: 3",
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
   "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Security",
 ]
 # Scanner core needs only PyYAML. The API/dashboard and local history use the rest.
@@ -29,11 +35,22 @@ blockchain = ["eth-account>=0.13,<1"]
 postgres = ["psycopg[binary]>=3.2,<4"]
 dev = ["pytest>=8", "httpx>=0.27", "eth-account>=0.13,<1"]
 
+[project.urls]
+Homepage = "https://github.com/SaIdEeVaN/secretsentinel"
+Documentation = "https://github.com/SaIdEeVaN/secretsentinel#readme"
+Issues = "https://github.com/SaIdEeVaN/secretsentinel/issues"
+Changelog = "https://github.com/SaIdEeVaN/secretsentinel/blob/main/CHANGELOG.md"
+
 [project.scripts]
 secretsentinel = "secretsentinel.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["secretsentinel"]
+
+# hatch_build.py copies rules/web3_rules.toml and rules/severity_mapping.yaml into
+# the package, so an installed copy has its ruleset (the canonical files stay in
+# the repository's rules/ directory).
+[tool.hatch.build.hooks.custom]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

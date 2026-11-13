@@ -71,6 +71,31 @@ jobs:
         working-directory: backend
         run: python -m pytest -q tests/test_api.py tests/test_hosting.py tests/test_retention.py
 
+  package:
+    # What PyPI users get (release.yml runs the same check before publishing):
+    # the wheel must carry its ruleset and work outside a source checkout.
+    name: package (wheel installs and finds its rules)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install pinned Gitleaks (checksum verified)
+        run: bash scripts/install_gitleaks.sh "$GITLEAKS_VERSION" "$GITLEAKS_SHA256" "$RUNNER_TEMP/bin"
+      - name: Build sdist and wheel (the wheel is built from the sdist)
+        run: |
+          python -m pip install --disable-pip-version-check "build==1.6.1" "twine==7.0.0"
+          python -m build backend --outdir "$RUNNER_TEMP/dist"
+          python -m twine check --strict "$RUNNER_TEMP"/dist/*
+      - name: Install the wheel in a clean venv and scan the demo outside the checkout
+        env:
+          GITLEAKS_PATH: ${{ runner.temp }}/bin/gitleaks
+        run: bash scripts/check_package.sh "$RUNNER_TEMP/dist"
+
   gate-selftest:
     name: CI gate self-test (exit codes + no raw secrets)
     runs-on: ubuntu-latest
