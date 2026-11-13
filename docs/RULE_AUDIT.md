@@ -85,9 +85,21 @@ of the first example and miss both. **Partly fixed**:
 - `url-query-credential` covers credential-named query parameters (below).
 - The remaining default rules are **not** changed. Replacing ~150 upstream
   regexes with our own copies would freeze them at 8.30.1 and miss every
-  upstream improvement. The better fix is an upstream issue or a pull request
-  to Gitleaks that widens the shared terminator; until then this is a known
-  limit.
+  upstream improvement. The better fix is upstream, in the shared
+  `secretSuffix` of Gitleaks' rule generator
+  (`cmd/generate/config/utils/generate.go`); until then this is a known limit.
+  The default config on Gitleaks `master` (checked 2026-11-13) is unchanged.
+
+Widening the terminator is not free. On a copy of the default config, scanned
+against a 762 MB Go module cache that has 727 findings with the stock rules:
+
+| Change | Extra findings |
+|---|---|
+| Add `, ) ] } > & \| <` to every rule | +126, of which 121 are `generic-api-key` on identifiers followed by `,` |
+| Add them to every rule except `generic-api-key`, which only gets `&` | +7 (3 of them are sample tokens in Gitleaks' own rule tests) |
+
+So the comma is what makes `generic-api-key` noisy, and the provider-specific
+rules can take the wider terminator.
 
 ## What SecretSentinel added
 
