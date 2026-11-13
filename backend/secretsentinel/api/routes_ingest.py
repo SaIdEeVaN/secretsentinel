@@ -20,7 +20,8 @@ from ..core.errors import ErrorCode, SecretSentinelError
 from ..core.security import safe_text
 from ..models import Finding, Repository
 from ..schemas import IngestCreated, IngestReport
-from ..services.store import record_outcome
+from ..services.policy import apply_extra_suppressions
+from ..services.store import dashboard_suppressions, record_outcome
 from ..services.types import SafeFinding, ScanOutcome
 from .deps import get_db, get_settings
 
@@ -96,6 +97,13 @@ def ingest(body: IngestReport, session: Session = Depends(get_db, scope="functio
                 blocking=f.blocking,
             )
         )
+    # Reviewed suppressions made on the dashboard apply to uploads too, so a decision
+    # taken here sticks. Done before counting new findings, so a suppressed finding
+    # never triggers the new-blocking alert.
+    if outcome.status == "completed":
+        covered = apply_extra_suppressions(outcome, dashboard_suppressions(session, repo.id))
+        if covered:
+            outcome.warnings.append(f"{covered} finding(s) covered by dashboard suppressions (the repository's own CI gate does not see these)")
     # Count findings this repository has never had before. Done before the scan is
     # recorded, so the upload cannot count its own rows as "seen".
     known = _known_fingerprints(session, repo.id, {f.fingerprint for f in outcome.findings})

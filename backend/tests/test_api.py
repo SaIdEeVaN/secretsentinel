@@ -424,6 +424,106 @@ def test_ingest_reports_new_blocking_findings(make_client):
         assert other["new_blocking_findings"] == 1  # history is per repository
 
 
+_CI_TOOL = {"name": "SecretSentinel", "version": "1.0.0", "scanner": "gitleaks", "scanner_version": "8.30.1",
+            "ruleset_version": "1.0.0", "ruleset_digest": "sha256:ab", "policy_digest": "sha256:cd"}
+
+
+def _ci_finding(path, line=1, severity="critical", blocking=True, status="open"):
+    return {"fingerprint": "ss1:" + "0" * 32, "rule_id": "web3-evm-private-key-assignment", "title": "t",
+            "rule_family": "web3-signing-key", "severity": severity, "confidence": "high", "requirement": "W3-01",
+            "relative_path": path, "start_line": line, "end_line": line, "start_column": 1, "commit_sha": "b" * 40,
+            "entropy": 3.8, "sources": ["git"], "also_matched": [], "status": status,
+            "suppression_id": None, "blocking": blocking, "remediation_key": "ROTATE_SIGNING_KEY"}
+
+
+def _ci_report(findings, name="acme/app"):
+    blocking = sum(1 for f in findings if f["blocking"])
+    return {
+        "schema": "secretsentinel-report/v1", "tool": _CI_TOOL, "repository_name": name, "findings": findings,
+        "scan": {"target": "repo", "mode": "git", "scope": "full-history", "status": "completed", "error_code": None,
+                 "error_message": None, "policy_result": "fail" if blocking else "pass", "fail_on": "high",
+                 "commit_sha": "a" * 40, "started_at": None, "finished_at": None, "total_findings": len(findings),
+                 "blocking_findings": blocking, "suppressed_findings": 0,
+                 "severity_counts": {"critical": blocking, "high": 0, "medium": 0, "low": len(findings) - blocking},
+                 "warnings": []},
+    }
+
+
+def _suppress_via_dashboard(c, scan_id, path, reviewer="alice", days=30):
+    items = c.get(f"/api/v1/scans/{scan_id}/findings").json()["items"]
+    finding = next(f for f in items if f["relative_path"] == path)
+    r = c.post("/api/v1/suppressions", json={
+        "finding_id": finding["id"], "reason": "Reviewed: synthetic value in a fixture", "reviewer": reviewer,
+        "expires_at": (date.today() + timedelta(days=days)).isoformat()})
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
+def test_dashboard_suppression_applies_to_the_next_ci_upload(make_client):
+    h = {"Authorization": "Bearer ingest-secret"}
+    with make_client(ingest_token="ingest-secret") as c:
+        first = c.post("/api/v1/ingest/scan-summary", json=_ci_report([_ci_finding("a.env"), _ci_finding("b.env")]), headers=h).json()
+        assert first["new_blocking_findings"] == 2
+        sup = _suppress_via_dashboard(c, first["scan_id"], "a.env")
+        again = c.post("/api/v1/ingest/scan-summary", json=_ci_report([_ci_finding("a.env"), _ci_finding("b.env")]), headers=h).json()
+        scan = c.get(f"/api/v1/scans/{again['scan_id']}").json()
+        assert (scan["blocking_findings"], scan["suppressed_findings"], scan["policy_result"]) == (1, 1, "fail")
+        items = c.get(f"/api/v1/scans/{again['scan_id']}/findings").json()["items"]
+        by_path = {f["relative_path"]: f for f in items}
+        assert by_path["a.env"]["status"] == "suppressed" and not by_path["a.env"]["blocking"]
+        assert by_path["b.env"]["status"] == "open" and by_path["b.env"]["blocking"]
+        detail = c.get(f"/api/v1/findings/{by_path['a.env']['id']}").json()["suppression"]
+        assert detail["origin"] == "dashboard" and detail["reviewer"] == "alice"
+        assert any("covered by dashboard suppressions" in w for w in scan["warnings"])
+
+        # Suppressing the last blocking finding makes the uploaded scan pass.
+        _suppress_via_dashboard(c, again["scan_id"], "b.env")
+        last = c.post("/api/v1/ingest/scan-summary", json=_ci_report([_ci_finding("a.env"), _ci_finding("b.env")]), headers=h).json()
+        scan = c.get(f"/api/v1/scans/{last['scan_id']}").json()
+        assert (scan["blocking_findings"], scan["suppressed_findings"], scan["policy_result"]) == (0, 2, "pass")
+
+        # Deactivating the suppression restores the finding on the next upload.
+        c.delete(f"/api/v1/suppressions/{sup['id']}")
+        back = c.post("/api/v1/ingest/scan-summary", json=_ci_report([_ci_finding("a.env"), _ci_finding("b.env")]), headers=h).json()
+        scan = c.get(f"/api/v1/scans/{back['scan_id']}").json()
+        assert (scan["blocking_findings"], scan["suppressed_findings"], scan["policy_result"]) == (1, 1, "fail")
+
+
+def test_suppressed_finding_does_not_raise_the_new_blocking_alert(make_client):
+    """A reviewed finding that moves a few lines within the same commit stays suppressed and is not an alert."""
+    h = {"Authorization": "Bearer ingest-secret"}
+    with make_client(ingest_token="ingest-secret") as c:
+        first = c.post("/api/v1/ingest/scan-summary", json=_ci_report([_ci_finding("a.env", line=1)]), headers=h).json()
+        _suppress_via_dashboard(c, first["scan_id"], "a.env")
+        moved = c.post("/api/v1/ingest/scan-summary", json=_ci_report([_ci_finding("a.env", line=7)]), headers=h).json()
+        assert (moved["new_findings"], moved["new_blocking_findings"]) == (1, 0)
+        assert c.get(f"/api/v1/scans/{moved['scan_id']}").json()["policy_result"] == "pass"
+
+
+def test_dashboard_suppressions_stay_inside_their_repository_and_expire(make_client):
+    h = {"Authorization": "Bearer ingest-secret"}
+    with make_client(ingest_token="ingest-secret") as c:
+        first = c.post("/api/v1/ingest/scan-summary", json=_ci_report([_ci_finding("a.env")]), headers=h).json()
+        sup = _suppress_via_dashboard(c, first["scan_id"], "a.env")
+        # Another repository with the same rule, path and commit is not covered.
+        other = c.post("/api/v1/ingest/scan-summary", json=_ci_report([_ci_finding("a.env")], name="acme/other"), headers=h).json()
+        assert other["new_blocking_findings"] == 1
+        assert c.get(f"/api/v1/scans/{other['scan_id']}").json()["blocking_findings"] == 1
+
+        # An expired suppression is ignored, with a constant warning (no values).
+        from sqlalchemy import update
+
+        from secretsentinel.database import session_scope
+        from secretsentinel.models import Suppression
+
+        with session_scope() as session:
+            session.execute(update(Suppression).where(Suppression.id == sup["id"]).values(expires_at=date.today() - timedelta(days=1)))
+        again = c.post("/api/v1/ingest/scan-summary", json=_ci_report([_ci_finding("a.env")]), headers=h).json()
+        scan = c.get(f"/api/v1/scans/{again['scan_id']}").json()
+        assert scan["blocking_findings"] == 1 and scan["policy_result"] == "fail"
+        assert any("ignored: expired" in w for w in scan["warnings"])
+
+
 def test_db_sessions_commit_before_the_response_is_sent(client):
     """Regression: request-scoped yield deps commit after the response is sent,
     so a browser reading right after a write saw stale data (found by the E2E

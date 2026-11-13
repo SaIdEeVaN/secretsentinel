@@ -99,11 +99,20 @@ tab only and is cleared when the tab closes.
 
 ### Exceptions for repositories scanned by GitHub Actions
 
-Put reviewed exceptions in **that repository's** `.secretsentinel.yml`; the
-scan reads it on every run. A suppression created on the dashboard only marks
-the finding until the repository's next upload, because each upload carries
-the CI result. Example (each entry needs a rule, a path, a reason, a reviewer
-and an expiry within a year):
+There are two places for a reviewed exception, and both stick:
+
+- **On the dashboard.** Suppress a finding from its detail panel. Every later
+  GitHub Actions upload for that repository applies the suppression, so the
+  finding stays suppressed and does not raise the new-finding alert. It covers
+  the same rule and path (and the same line, or the same commit if the line
+  moved), stops at its expiry, and applies only to that repository.
+  Deactivate it in **Rules & Policy** and the next upload reports the finding
+  again. The upload's scan shows a note that dashboard suppressions were
+  applied: the repository's own CI gate (if it has one) does not see them.
+- **In the repository.** Put the exception in **that repository's**
+  `.secretsentinel.yml`; the scan reads it on every run, and it travels with
+  the code. Prefer this for repositories you own. Example (each entry needs a
+  rule, a path, a reason, a reviewer and an expiry within a year):
 
 ```yaml
 version: 1

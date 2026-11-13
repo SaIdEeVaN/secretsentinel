@@ -290,6 +290,37 @@ def evaluate(outcome: ScanOutcome, fail_on: str, suppressions: list[Suppression]
         outcome.policy_result = "fail" if outcome.blocking_findings else "pass"
 
 
+def apply_extra_suppressions(outcome: ScanOutcome, suppressions: list[Suppression], today: date | None = None) -> int:
+    """Apply reviewed suppressions to an outcome that was already evaluated elsewhere.
+
+    Used for scans uploaded from CI: the repository's own policy has been applied
+    by the workflow, and this adds the dashboard's suppressions on top. It only
+    ever turns findings from "not suppressed" into "suppressed" (never the other
+    way) and never makes a passing scan fail. Returns how many findings changed.
+    """
+    today = today or datetime.now(timezone.utc).date()
+    active: list[Suppression] = []
+    for s in suppressions:
+        problem = s.problem(today)
+        if problem:
+            outcome.warnings.append(f"suppression {s.id} ignored: {problem}")
+        else:
+            active.append(s)
+    changed = 0
+    for f in outcome.findings:
+        if f.status == "suppressed":
+            continue
+        match = next((s for s in active if s.matches(f)), None)
+        if match is not None:
+            f.status = "suppressed"
+            f.suppression_id = match.id
+            f.blocking = False
+            changed += 1
+    if changed and outcome.status == "completed" and outcome.policy_result == "fail" and not outcome.blocking_findings:
+        outcome.policy_result = "pass"
+    return changed
+
+
 def build_baseline(findings: list[SafeFinding], reason: str, reviewer: str, expires: date, ruleset_digest: str | None) -> dict:
     today = datetime.now(timezone.utc).date()
     probe = Suppression(id="probe", rule_id="probe", path="probe", reason=reason, reviewer=reviewer, expires=expires)

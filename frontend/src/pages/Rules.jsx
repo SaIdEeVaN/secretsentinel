@@ -178,7 +178,7 @@ export default function Rules() {
               Dashboard suppressions
             </h2>
             <p className="mt-1 text-xs text-muted">
-              Recorded from finding details; applied to future scans of the same repository until they expire or are deactivated.
+              Recorded from finding details; applied to future scans and GitHub Actions uploads of the same repository until they expire or are deactivated.
             </p>
             <ErrorState error={error || sups.error} />
             {sups.data && sups.data.length === 0 && (
