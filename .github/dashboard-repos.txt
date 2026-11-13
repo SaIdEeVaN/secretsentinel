@@ -27,8 +27,6 @@ SaIdEeVaN/PUC
 SaIdEeVaN/drsivakumardhandapani
 SaIdEeVaN/CDF-MINI-PROJECT
 SaIdEeVaN/BIC_WEB
-SaIdEeVaN/pathway
-SaIdEeVaN/llm-app
 SaIdEeVaN/Data-Structure-using-C-Notes
 
 # Private (needs SECRETSENTINEL_REPO_READ_TOKEN):
