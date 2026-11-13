@@ -3,7 +3,7 @@ requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [project]
-name = "secretsentinel"
+name = "secretsentinel-scanner"
 version = "1.0.0"
 description = "Web3-focused secret leakage detection and DevSecOps platform built on Gitleaks"
 readme = "README.md"
