@@ -1,0 +1,87 @@
+name: SecretSentinel Scanner
+description: Scan a repository for leaked secrets (Gitleaks plus Web3 rules) and fail on blocking findings. Secret values are never printed.
+author: SaIdEeVaN
+branding:
+  icon: shield
+  color: green
+
+# Usage (check out full history for the git and both modes):
+#
+#   - uses: actions/checkout@v4
+#     with:
+#       fetch-depth: 0
+#   - uses: SaIdEeVaN/secretsentinel@v1
+#
+# Runs on Linux x64 runners. Gitleaks is downloaded at a pinned version and its
+# SHA-256 is checked; the scanner's only dependency (PyYAML) is installed from a
+# hash-pinned requirements file. Nothing is uploaded anywhere.
+#
+# Note for pull requests: the scan reads <path>/.secretsentinel.yml, which a pull
+# request can edit. For a gate that a pull request cannot weaken, read the policy
+# from the base branch instead (see docs/CI_SETUP.md and secret-scan.yml).
+
+inputs:
+  path:
+    description: Directory to scan. Use a Git checkout for the git and both modes.
+    default: "."
+  mode:
+    description: "What to scan: dir (current files), git (history; needs fetch-depth: 0) or both."
+    default: both
+  fail-on:
+    description: "Lowest severity that fails the step: critical, high, medium, low or none. Empty uses the policy file, then high."
+    default: ""
+  policy:
+    description: Policy file to use. Empty uses <path>/.secretsentinel.yml when it exists.
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Check the runner
+      shell: bash
+      run: |
+        if [[ "$RUNNER_OS" != "Linux" || "$RUNNER_ARCH" != "X64" ]]; then
+          echo "::error::SecretSentinel Scanner runs on Linux x64 runners, for example ubuntu-latest."
+          exit 1
+        fi
+
+    # update-environment: false leaves the caller's own Python setup untouched.
+    - name: Set up Python
+      id: py
+      uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+      with:
+        python-version: "3.12"
+        update-environment: false
+
+    - name: Install pinned Gitleaks and the scanner's dependency
+      shell: bash
+      env:
+        GITLEAKS_VERSION: "8.30.1"
+        GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+        PY: ${{ steps.py.outputs.python-path }}
+      run: |
+        bash "$GITHUB_ACTION_PATH/scripts/install_gitleaks.sh" "$GITLEAKS_VERSION" "$GITLEAKS_SHA256" "$RUNNER_TEMP/secretsentinel/bin"
+        "$PY" -m venv "$RUNNER_TEMP/secretsentinel/venv"
+        "$RUNNER_TEMP/secretsentinel/venv/bin/python" -m pip install --disable-pip-version-check --quiet \
+          --require-hashes --no-deps -r "$GITHUB_ACTION_PATH/backend/requirements-ci.txt"
+
+    # Inputs reach the script only through environment variables and are checked
+    # against fixed lists, so they cannot inject shell code.
+    - name: Scan
+      shell: bash
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_MODE: ${{ inputs.mode }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_POLICY: ${{ inputs.policy }}
+        GITLEAKS_PATH: ${{ runner.temp }}/secretsentinel/bin/gitleaks
+      run: |
+        case "$INPUT_MODE" in dir|git|both) ;; *) echo "::error::mode must be dir, git or both"; exit 2 ;; esac
+        case "$INPUT_FAIL_ON" in ""|critical|high|medium|low|none) ;; *) echo "::error::fail-on must be critical, high, medium, low or none"; exit 2 ;; esac
+        export PYTHONPATH="$GITHUB_ACTION_PATH/backend"
+        export SECRETSENTINEL_RULES_DIR="$GITHUB_ACTION_PATH/rules"
+        args=(check "$INPUT_PATH" --mode "$INPUT_MODE" --github-annotations --github-summary --no-size-limit)
+        if [[ -n "$INPUT_FAIL_ON" ]]; then args+=(--fail-on "$INPUT_FAIL_ON"); fi
+        if [[ -n "$INPUT_POLICY" ]]; then args+=(--policy "$INPUT_POLICY"); fi
+        # Exit codes: 0 pass, 1 blocking findings, 2 config error, 3 scan error.
+        "$RUNNER_TEMP/secretsentinel/venv/bin/python" -m secretsentinel "${args[@]}"

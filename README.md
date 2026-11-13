@@ -23,6 +23,60 @@ from a scanned repository. Reports contain location and classification metadata,
 never the secret value or source excerpt. A clean scan is **not a guarantee that
 the repository is free of secrets**.
 
+## Use it in your project
+
+You don't need this repository to scan your own code. Install the CLI from PyPI
+(Python 3.11+) and make [Gitleaks](https://github.com/gitleaks/gitleaks) 8.x
+available, on PATH or through `GITLEAKS_PATH`:
+
+```bash
+pip install secretsentinel-scanner
+```
+
+```bash
+secretsentinel doctor
+```
+
+```bash
+secretsentinel check .
+```
+
+`doctor` checks Gitleaks, Git and the ruleset; `check` exits 1 on blocking
+findings. The package is published from version 1.0.0; before that, install it
+from a checkout with `pip install ./backend`.
+
+**Before each commit**, with the [pre-commit](https://pre-commit.com) framework
+(the hook runs the installed `secretsentinel` command):
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/SaIdEeVaN/secretsentinel
+    rev: v1.0.0
+    hooks:
+      - id: secretsentinel
+```
+
+**In GitHub Actions** (Linux x64 runners):
+
+```yaml
+- uses: actions/checkout@v7
+  with:
+    fetch-depth: 0 # full history, for the default "both" mode
+- uses: SaIdEeVaN/secretsentinel@v1
+  with:
+    fail-on: high # optional; default: the repository's .secretsentinel.yml, then high
+```
+
+Inputs: `path`, `mode` (`dir`, `git` or `both`), `fail-on` and `policy`.
+Findings appear as annotations and in the job summary, without values. In a pull
+request the Action reads `.secretsentinel.yml` from the pull request itself, so
+a pull request could add its own exceptions. For a check that a pull request
+can't weaken, use the base-branch setup in [docs/CI_SETUP.md](docs/CI_SETUP.md).
+
+The PyPI package is the CLI. The web dashboard runs from a checkout (below) or
+as your own hosted copy ([docs/HOSTING.md](docs/HOSTING.md)).
+
 ## Quick start: Windows 11
 
 Install Git, Python 3.12 and Node.js LTS (22 or 24), then open PowerShell in this
@@ -127,7 +181,8 @@ deliberately, with `git commit --no-verify`; remove it with
 `secretsentinel hook uninstall`. A hook that SecretSentinel did not write is
 never overwritten. If you use the [pre-commit](https://pre-commit.com)
 framework instead, this repository ships a `.pre-commit-hooks.yaml` entry
-(`id: secretsentinel`; needs `secretsentinel` and Gitleaks on PATH).
+(`id: secretsentinel`; install the command with `pip install secretsentinel-scanner` and
+put Gitleaks on PATH).
 
 ## Configuration and policy
 
@@ -199,6 +254,8 @@ interpreter; the browser runner otherwise uses `.venv`, then `python`.
 - [Detection rule audit: near-miss gaps and how to re-run the check](docs/RULE_AUDIT.md)
 - [Test plan and PRD test-case matrix](docs/TEST_PLAN.md)
 - [Synthetic demonstration](docs/DEMO.md)
+- [Releasing a new version (PyPI and the GitHub Action)](docs/RELEASING.md)
+- [Contributing](CONTRIBUTING.md), [security policy](SECURITY.md) and [changelog](CHANGELOG.md)
 - [Local validation results and remaining external checks](docs/VALIDATION.md)
 
 Dependabot (`.github/dependabot.yml`) opens one weekly pull request per
@@ -216,6 +273,15 @@ your repositories and uploads only the sanitized report, and you sign in with a
 token. The hosted copy never scans or
 clones code, and it uses one shared token rather than per-user accounts. See
 [docs/HOSTING.md](docs/HOSTING.md).
+
+### What the hosted dashboard stores
+
+Only sanitized metadata: repository names, rule IDs, severities, file paths,
+line numbers, commit IDs, scan times and counts, triage status and the audit
+trail. Never a secret value or a line of source. Scan history older than 180
+days is deleted by default (`SCAN_RETENTION_DAYS` in `render.yaml`); each
+repository's latest scan is kept. Anyone with the sign-in token sees all of it,
+so treat the token like a password.
 
 ## Optional: signed scan attestations (P2)
 
