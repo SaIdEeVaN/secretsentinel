@@ -17,6 +17,8 @@ from secretsentinel.services.rules import load_ruleset
 from secretsentinel.services.scanner import ScanRequest, run_scan
 
 RULES_DIR = find_rules_dir()
+# Custom rules that are not Web3 rules: gaps in the Gitleaks defaults for ordinary service tokens.
+SERVICE_RULE_PREFIXES = ("twitter-",)
 GO_UNSUPPORTED = [r"\(\?=", r"\(\?!", r"\(\?<=", r"\(\?<!", r"\\[1-9]", r"\(\?P=", r"\(\?>"]
 
 
@@ -34,7 +36,7 @@ def test_rule_ids_unique_and_not_generic():
     ids = [r["id"] for r in _toml()["rules"] if r.get("regex") or r.get("path")]
     assert len(ids) == len(set(ids))
     for rid in ids:
-        assert rid.startswith("web3-")
+        assert rid.startswith(("web3-", *SERVICE_RULE_PREFIXES))
         assert "generic" not in rid  # Gitleaks would drop overlapping generic-* findings
 
 
@@ -56,7 +58,8 @@ def test_every_web3_rule_is_mapped_with_valid_remediation():
         meta = rs.meta(rid)
         assert meta.source == "exact", rid
         assert meta.remediation_key in CATALOG
-        assert meta.requirement and meta.requirement.startswith("W3-")
+        if rid.startswith("web3-"):
+            assert meta.requirement and meta.requirement.startswith("W3-")
 
 
 def test_mapping_resolution_order():
@@ -194,3 +197,80 @@ def test_scan_works_with_crlf_ruleset(tmp_path, gitleaks_bin):
     o = run_scan(ScanRequest(target=target, mode="dir"), Settings(gitleaks_path=gitleaks_bin, db_url="sqlite://"), ruleset=rs)
     assert o.status == "completed", o.error_code
     assert o.blocking_findings == 1
+
+
+# --------------------------------------------------------------------------
+# Twitter/X bearer tokens: the Gitleaks default rule needs exactly 22 leading
+# "A"s, real tokens also come with 21 (a gap found on a real repository).
+# All tokens here are synthetic and generated at runtime.
+# --------------------------------------------------------------------------
+
+def _scan_text_files(tmp_path, gitleaks_bin, files: dict[str, str]):
+    target = tmp_path / "twitter-scan"
+    target.mkdir()
+    for name, text in files.items():
+        (target / name).write_text(text, encoding="utf-8")
+    outcome = run_scan(ScanRequest(target=target, mode="dir"), Settings(gitleaks_path=gitleaks_bin, db_url="sqlite://"))
+    assert outcome.status == "completed", outcome.error_code
+    by_file: dict[str, list] = {}
+    for f in outcome.findings:
+        by_file.setdefault(f.relative_path, []).append(f)
+    return by_file
+
+
+@pytest.mark.gitleaks
+def test_twitter_bearer_with_21_a_prefix_is_blocking(tmp_path, gitleaks_bin):
+    from secretsentinel.fixtures import synth
+
+    short = synth("twitter_bearer21", "rules-test-21")
+    assert short.startswith("A" * 21) and not short.startswith("A" * 22)
+    found = _scan_text_files(tmp_path, gitleaks_bin, {"a.env": f"TWITTER_API_TOKEN={short}\n"})
+    (finding,) = found["a.env"]
+    assert finding.rule_id == "twitter-bearer-token-short-prefix"
+    assert finding.severity == "high" and finding.blocking
+    assert finding.remediation_key == "ROTATE_API_TOKEN"
+
+
+@pytest.mark.gitleaks
+def test_twitter_bearer_with_22_a_prefix_is_one_card_not_two(tmp_path, gitleaks_bin):
+    from secretsentinel.fixtures import synth
+
+    long = synth("twitter_bearer22", "rules-test-22")
+    found = _scan_text_files(tmp_path, gitleaks_bin, {"b.env": f"TWITTER_API_TOKEN={long}\n"})
+    (finding,) = found["b.env"]  # the default rule also matches: merged, not duplicated
+    assert finding.blocking
+    assert {finding.rule_id, *finding.also_matched} >= {"twitter-bearer-token-short-prefix"}
+
+
+@pytest.mark.gitleaks
+def test_twitter_bearer_in_other_common_shapes(tmp_path, gitleaks_bin):
+    from secretsentinel.fixtures import synth
+
+    tok = synth("twitter_bearer21", "rules-test-shapes")
+    files = {
+        "header.sh": f'curl -H "Authorization: Bearer {tok}" https://api.example.test/2/tweets\n',
+        "client.py": f'x_bearer_token = "{tok}"\n',
+    }
+    found = _scan_text_files(tmp_path, gitleaks_bin, files)
+    for name in ("header.sh", "client.py"):
+        assert any(f.blocking for f in found.get(name, [])), name
+
+
+@pytest.mark.gitleaks
+def test_twitter_bearer_rule_ignores_lookalikes(tmp_path, gitleaks_bin):
+    from secretsentinel.fixtures import synth
+
+    body = synth("twitter_bearer21", "rules-test-lookalike")[22:]  # 92 chars of the generated tail
+    files = {
+        # fewer than 18 leading "A"s
+        "short_prefix.env": f"TWITTER_API_TOKEN={'A' * 17}Q{body}\n",
+        # lower-case prefix: the token part is case-sensitive
+        "lower.env": f"TWITTER_API_TOKEN={'a' * 21}Q{body}\n",
+        # no Twitter/X/Bearer context
+        "other.env": f"SERVICE_TOKEN={'A' * 21}Q{body}\n",
+        # placeholders and a short run of A's
+        "placeholders.env": "TWITTER_API_TOKEN=your-twitter-token-here\nTWITTER_BEARER_TOKEN=${TWITTER_BEARER_TOKEN}\n",
+    }
+    found = _scan_text_files(tmp_path, gitleaks_bin, files)
+    for name in files:
+        assert "twitter-bearer-token-short-prefix" not in {f.rule_id for f in found.get(name, [])}, name

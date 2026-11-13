@@ -89,6 +89,9 @@ def synth(kind: str, label: str) -> str:
         "alnum36": lambda: _chars("alnum", label, _ALNUM, 36),
         "upper34": lambda: _chars("upper", label, _UPPER_ALNUM, 34),
         "aws_akid": lambda: "AKIA" + _chars("b32", label, _BASE32, 16),
+        # Twitter/X app-only bearer shape: a run of "A"s, one non-"A", then 92 more characters.
+        "twitter_bearer21": lambda: "A" * 21 + "Q" + _chars("twitter", label, _ALNUM, 92),
+        "twitter_bearer22": lambda: "A" * 22 + "Q" + _chars("twitter", label, _ALNUM, 91),
         "b58_88": lambda: _chars("b58", label, _BASE58, 88),
         "xprv": lambda: "xprv" + _chars("b58", label, _BASE58, 107),
         "bytes64": lambda: ",".join(str(b) for b in _stream("bytes", label, 64)),

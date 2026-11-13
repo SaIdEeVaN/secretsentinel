@@ -23,8 +23,8 @@ deployments or Sepolia calls were used.
 
 | Target | Result |
 |---|---|
-| Synthetic detection ≥ 90% | 28/28 positive fixtures detected by the intended rule (100%) |
-| False positives ≤ 10% | 0/11 benign fixtures produced any finding (0%) |
+| Synthetic detection ≥ 90% | 29/29 positive fixtures detected by the intended rule (100%) |
+| False positives ≤ 10% | 0/12 benign fixtures produced any finding (0%) |
 | Safe reporting | 0 canaries in CLI output, JSON/SARIF/CSV, GitHub annotations/summary, API responses, SQLite dumps, logs, browser responses/storage |
 | CI correctness | Every leaking fixture run and the leaking simulated PR exited 1; errors exited 2/3 |
 | Latency ≤ 30 s, < 1,000 files | 999 files / 6 commits / 5.5 MB: `dir` 1.3 s, `git` 1.3 s, `both` 2.4 s (including Python start-up) |

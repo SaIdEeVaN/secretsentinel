@@ -36,6 +36,7 @@ positives:
   - {path: synthetic_positive/keystore/backup-keystore.json, rule: web3-keystore-ciphertext}
   - {path: synthetic_positive/services/aws.env, rule: aws-access-token, tests: [T02]}
   - {path: synthetic_positive/services/github_client.py, rule: github-pat, tests: [T02]}
+  - {path: synthetic_positive/services/twitter.env, rule: twitter-bearer-token-short-prefix}
   - {path: synthetic_positive/services/server.pem, rule: private-key}
   - {path: synthetic_positive/services/app_settings.yaml, rule: generic-api-key}
 
@@ -51,3 +52,4 @@ negatives:
   - {path: benign_negative/public_rpc.js}
   - {path: benign_negative/zero_key.env}
   - {path: benign_negative/xpub.txt}
+  - {path: benign_negative/twitter_placeholders.env}

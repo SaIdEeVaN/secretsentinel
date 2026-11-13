@@ -160,6 +160,14 @@ rules:
     remediation_key: PROTECT_KEYSTORE
     requirement: W3-05
 
+  # ---- Gaps in the Gitleaks default rules ---------------------------------
+  twitter-bearer-token-short-prefix:
+    title: Twitter/X bearer token (21-character prefix)
+    severity: high
+    confidence: high
+    family: service-credential
+    remediation_key: ROTATE_API_TOKEN
+
   # ---- SecretSentinel policy checks (not Gitleaks rules) -----------------
   secretsentinel-gitleaksignore-present:
     title: Repository .gitleaksignore can hide findings from the gate

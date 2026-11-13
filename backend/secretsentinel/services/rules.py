@@ -108,9 +108,9 @@ class Ruleset:
         for rule in self.toml.get("rules", []):
             if rule.get("regex") or rule.get("path"):
                 self.custom_rules[rule["id"]] = rule
-        missing = [rid for rid in self.custom_rules if rid.startswith("web3-") and rid not in self.exact]
+        missing = [rid for rid in self.custom_rules if rid not in self.exact]
         if missing:
-            raise SecretSentinelError(ErrorCode.INVALID_CONFIG, "Every Web3 rule needs a severity mapping.")
+            raise SecretSentinelError(ErrorCode.INVALID_CONFIG, "Every custom rule needs a severity mapping.")
 
     @property
     def digest(self) -> str:

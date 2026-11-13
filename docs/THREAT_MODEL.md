@@ -29,8 +29,8 @@ the condensed security model and user-facing limitations.
 |---|---|---|
 | Secret printed in logs | `--redact=100`; strict sanitizer; constant error messages; whitelist JSON logger (`core/log.py`); stderr of Gitleaks read only to pick an error code | `test_no_raw_secrets.py`, `ci_gate_selftest.sh` (scans its own log) |
 | Raw report uploaded as CI artifact | Reports stay in a private temp dir deleted in `finally`; workflows upload no artifacts; exports are built from sanitized rows | `test_scanner.py::test_temp_files_removed`, export tests |
-| Regex false positive | Context-required Web3 rules, entropy floors, hash/digest allowlists, path-based confidence lowering, reviewed expiring suppressions, baselines | `test_rules.py` (0/11 benign fixtures flagged) |
-| Regex false negative | Gitleaks defaults kept (`useDefault = true`) plus 18 Web3 rules; `both` mode covers tree + history; documented limits | `test_rules.py` (28/28 synthetic positives) |
+| Regex false positive | Context-required Web3 rules, entropy floors, hash/digest allowlists, path-based confidence lowering, reviewed expiring suppressions, baselines | `test_rules.py` (0/12 benign fixtures flagged) |
+| Regex false negative | Gitleaks defaults kept (`useDefault = true`) plus 18 Web3 rules and 1 gap-filling rule (Twitter/X bearer tokens with a 21-`A` prefix); `both` mode covers tree + history; documented limits | `test_rules.py` (29/29 synthetic positives) |
 | Malicious path / symlink | `Path.resolve(strict=True)` then allowlist containment; re-validated when the job starts; Gitleaks does not follow symlinks | `test_security.py`, `test_api.py`, E2E out-of-root test |
 | Shell injection from file names / refs | argv lists only (`shell=False`); Git refs syntax-checked, resolved to a SHA, never passed raw to `git log` | `test_scanner.py::test_malicious_or_unknown_ref_rejected` |
 | Repository code execution | No installs/tests run; `--no-ext-diff --no-textconv` for history; `core.fsmonitor=false`; no auto-loaded `.env`; scanner path never taken from the target | `test_scanner.py::test_gitleaks_invocation_is_hardened` |
