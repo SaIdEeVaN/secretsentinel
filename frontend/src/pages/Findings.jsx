@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client.js";
 import FindingTable from "../components/FindingTable.jsx";
@@ -6,6 +6,7 @@ import { EmptyState, ErrorState, Loading } from "../components/States.jsx";
 import { ChipGroup, Field, PageHeader, Pagination } from "../components/Widgets.jsx";
 import { MODE_LABEL } from "../components/format.js";
 import { useAsync } from "../hooks/useAsync.js";
+import { REPOSITORY_ID, useListSearch } from "../hooks/useListSearch.js";
 import { FindingDetailPanel } from "./FindingDetail.jsx";
 
 const SEVERITY_CHIPS = [["critical", "Critical"], ["high", "High"], ["medium", "Medium"], ["low", "Low"]];
@@ -57,30 +58,41 @@ function BulkBar({ ids, onDone, onClear }) {
 }
 
 const EMPTY = { severity: "", status: "", rule_id: "", mode: "", repository_id: "", blocking: "", latest_only: "true" };
+const ALLOWED = {
+  severity: SEVERITY_CHIPS.map(([value]) => value),
+  status: STATUS_CHIPS.map(([value]) => value),
+  rule_id: /^[a-z0-9][a-z0-9._-]{0,99}$/,
+  mode: Object.keys(MODE_LABEL),
+  repository_id: REPOSITORY_ID,
+  blocking: ["true", "false"],
+  latest_only: ["true", "false"],
+};
+const PAGE_SIZE = 25;
 
 export default function Findings() {
   const navigate = useNavigate();
-  const [filters, setFilters] = useState(EMPTY);
-  const [page, setPage] = useState(1);
+  const { filters, filterKey, viewKey, page, list, choose, setPage, reset } = useListSearch({
+    defaults: EMPTY, allowed: ALLOWED, pageSize: PAGE_SIZE, load: api.findings,
+  });
   const [selected, setSelected] = useState(null);
   const [checked, setChecked] = useState(() => new Set());
   const [bulkResult, setBulkResult] = useState(null);
+  const currentView = useRef(viewKey);
+  currentView.current = viewKey;
   const repos = useAsync(() => api.repositories(), []);
   const rules = useAsync(() => api.rules(), []);
-  const list = useAsync(() => api.findings({ ...filters, page, page_size: 25 }), [filters, page]);
+  const repositoryOptions = repos.data ?? [];
+  const ruleOptions = rules.data?.rules ?? [];
   // Counts for the chips; if they fail to load the chips simply show no numbers.
-  const facets = useAsync(() => api.findingFacets(filters), [filters]);
+  const facets = useAsync(() => api.findingFacets(filters), [], filterKey);
   const counts = facets.error ? null : facets.data;
-  const choose = (k, v) => {
-    setPage(1);
-    setFilters((f) => ({ ...f, [k]: v }));
-  };
   const set = (k) => (e) => choose(k, e.target.value);
-  // A selection only makes sense for the rows on screen.
+  // Selections belong to the current page of results.
   useEffect(() => {
+    setSelected(null);
     setChecked(new Set());
     setBulkResult(null);
-  }, [filters, page]);
+  }, [viewKey]);
   const check = (ids, on) =>
     setChecked((prev) => {
       const next = new Set(prev);
@@ -103,7 +115,7 @@ export default function Findings() {
         title="Findings"
         subtitle="Redacted findings only: rule, severity, location and status. Secret values are never available."
         actions={
-          <button type="button" className="btn btn-ghost" onClick={() => { setPage(1); setFilters(EMPTY); }}>
+          <button type="button" className="btn btn-ghost" onClick={reset}>
             Reset filters
           </button>
         }
@@ -125,7 +137,10 @@ export default function Findings() {
         <Field label="Rule" htmlFor="ff-rule">
           <select id="ff-rule" className="input" value={filters.rule_id} onChange={set("rule_id")}>
             <option value="">Any</option>
-            {(rules.data?.rules ?? []).map((r) => (
+            {filters.rule_id && !ruleOptions.some((r) => r.rule_id === filters.rule_id) && (
+              <option value={filters.rule_id}>{filters.rule_id}</option>
+            )}
+            {ruleOptions.map((r) => (
               <option key={r.rule_id} value={r.rule_id}>
                 {r.rule_id}
               </option>
@@ -145,7 +160,10 @@ export default function Findings() {
         <Field label="Repository" htmlFor="ff-repo">
           <select id="ff-repo" className="input" value={filters.repository_id} onChange={set("repository_id")}>
             <option value="">Any</option>
-            {(repos.data ?? []).map((r) => (
+            {filters.repository_id && !repositoryOptions.some((r) => r.id === filters.repository_id) && (
+              <option value={filters.repository_id}>{filters.repository_id}</option>
+            )}
+            {repositoryOptions.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.display_name}
               </option>
@@ -182,12 +200,14 @@ export default function Findings() {
               {bulkResult.failed ? `; ${bulkResult.failed} could not be changed (${bulkResult.message || "error"}).` : "."}
             </p>
           )}
-          {checked.size > 0 && !selected && (
+          {list.data && checked.size > 0 && !selected && (
             <BulkBar
               ids={[...checked]}
               onDone={(result) => {
-                setBulkResult(result);
-                setChecked(new Set());
+                if (currentView.current === viewKey) {
+                  setBulkResult(result);
+                  setChecked(new Set());
+                }
                 refresh();
               }}
               onClear={() => setChecked(new Set())}
@@ -203,7 +223,7 @@ export default function Findings() {
                 checked={selected ? undefined : checked}
                 onCheck={selected ? undefined : check}
               />
-              <Pagination page={page} pageSize={25} total={list.data.total} onPage={setPage} />
+              <Pagination page={page} pageSize={PAGE_SIZE} total={list.data.total} onPage={setPage} />
             </div>
           )}
         </div>

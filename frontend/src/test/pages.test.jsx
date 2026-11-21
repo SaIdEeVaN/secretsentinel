@@ -99,7 +99,7 @@ describe("Findings", () => {
     renderAt("/findings", <Findings />);
     await screen.findByText(/Page 1 of 3/);
     await userEvent.click(within(screen.getByRole("group", { name: "Severity" })).getByRole("button", { name: /^High/ }));
-    await userEvent.click(screen.getByRole("button", { name: /Next/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /Next/ }));
     await screen.findByText(/Page 2 of 3/);
     await userEvent.click(screen.getByRole("button", { name: "Reset filters" }));
     await screen.findByText(/Page 1 of 3/);
@@ -108,6 +108,25 @@ describe("Findings", () => {
       expect(params.get("page")).toBe("1");
       expect(params.has("severity")).toBe(false);
     });
+  });
+
+  it("loads a shared view, ignores invalid filters and recovers an out-of-range page", async () => {
+    const { calls } = mockApi({
+      "GET /repositories": [], "GET /rules": { rules: [] },
+      "GET /findings": (_init, path) => {
+        const page = Number(new URL(path, "http://local").searchParams.get("page"));
+        return { items: page === 2 ? [finding()] : [], total: 26, page, page_size: 25 };
+      },
+    });
+    renderAt("/findings?severity=invalid&status=open&latest_only=false&blocking=false&repository_id=demo&page=9", <Findings />, "/findings");
+    expect(await screen.findByText(/Page 2 of 2/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Scope")).toHaveValue("false");
+    expect(screen.getByLabelText("Blocking")).toHaveValue("false");
+    expect(screen.getByLabelText("Repository")).toHaveValue("demo");
+    const queries = calls.filter((c) => c.path.startsWith("/findings?")).map((c) => new URL(c.path, "http://local").searchParams);
+    expect(queries.map((q) => q.get("page"))).toEqual(["9", "2"]);
+    expect(queries[0].get("status")).toBe("open");
+    expect(queries[0].has("severity")).toBe(false);
   });
 });
 

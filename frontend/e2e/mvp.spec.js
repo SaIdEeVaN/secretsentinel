@@ -45,6 +45,23 @@ test("demo scans current files and deleted history, exports reports and supports
   await page.getByRole("button", { name: "Acknowledge", exact: true }).click();
   await expect(page.getByRole("button", { name: "Acknowledge", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByText(/Blocking · Acknowledged/)).toBeVisible();
+
+  await page.goto("/findings?status=acknowledged");
+  const statusFilters = page.getByRole("group", { name: "Status" });
+  await expect(statusFilters.getByRole("button", { name: /^Acknowledged/ })).toHaveAttribute("aria-pressed", "true");
+  await statusFilters.getByRole("button", { name: /^Open/ }).click();
+  await expect(page).toHaveURL(/\/findings\?status=open$/);
+  await page.goBack();
+  await expect(statusFilters.getByRole("button", { name: /^Acknowledged/ })).toHaveAttribute("aria-pressed", "true");
+
+  await page.goto("/scans?policy_result=fail");
+  const resultFilters = page.getByRole("group", { name: "Result" });
+  await expect(resultFilters.getByRole("button", { name: "Fail" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("row").filter({ hasText: "demo" }).click();
+  await expect(page.getByRole("heading", { name: "Scan details", exact: true })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/scans\?policy_result=fail$/);
+  await expect(resultFilters.getByRole("button", { name: "Fail" })).toHaveAttribute("aria-pressed", "true");
   expect(errors).toEqual([]);
 });
 

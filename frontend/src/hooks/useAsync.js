@@ -1,29 +1,33 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-/** Run an async loader and expose { data, error, loading, reload }. */
-export function useAsync(loader, deps = []) {
-  const [state, setState] = useState({ data: null, error: null, loading: true });
-  const loaderRef = useRef(loader);
-  loaderRef.current = loader;
+const pending = { data: null, error: null, loading: true };
+
+/** Run a loader, optionally keeping results only within the same scope. */
+export function useAsync(loader, deps = [], scope) {
+  const [state, setState] = useState(pending);
+  const requestRef = useRef({ loader, scope });
+  requestRef.current = { loader, scope };
   const seq = useRef(0);
 
   const run = useCallback(async () => {
+    const { loader: load, scope: requestScope } = requestRef.current;
     const id = ++seq.current;
-    setState((s) => ({ ...s, loading: true, error: null }));
+    setState((s) => ({ ...(s.scope === requestScope ? s : pending), loading: true, error: null, scope: requestScope }));
     try {
-      const data = await loaderRef.current();
-      if (id === seq.current) setState({ data, error: null, loading: false });
+      const data = await load();
+      if (id === seq.current) setState({ data, error: null, loading: false, scope: requestScope });
     } catch (error) {
-      if (id === seq.current) setState((s) => ({ data: s.data, error, loading: false }));
+      if (id === seq.current) setState((s) => ({ ...s, error, loading: false }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, [scope, ...deps]);
 
   useEffect(() => {
     run();
   }, [run]);
 
-  return { ...state, reload: run };
+  const { data, error, loading } = state.scope === scope ? state : pending;
+  return { data, error, loading, reload: run };
 }
 
 /** Poll ``fn`` every ``ms`` while ``active`` is true. */

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client.js";
 import { ResultPill } from "../components/ScanStatus.jsx";
@@ -6,6 +5,7 @@ import { EmptyState, ErrorState, Loading } from "../components/States.jsx";
 import { ChipGroup, Field, PageHeader, Pagination } from "../components/Widgets.jsx";
 import { MODE_LABEL, formatDate, formatDuration, shortSha, timeAgo } from "../components/format.js";
 import { useAsync, usePolling } from "../hooks/useAsync.js";
+import { REPOSITORY_ID, useListSearch } from "../hooks/useListSearch.js";
 
 const RESULT_CHIPS = [
   ["pass", "Pass"],
@@ -13,24 +13,33 @@ const RESULT_CHIPS = [
   ["not_evaluated", "Error / cancelled"],
 ];
 const EMPTY = { status: "", mode: "", policy_result: "", repository_id: "" };
+const SCAN_STATUSES = ["queued", "running", "completed", "failed", "cancelled"];
+const ALLOWED = {
+  status: SCAN_STATUSES,
+  mode: Object.keys(MODE_LABEL),
+  policy_result: RESULT_CHIPS.map(([value]) => value),
+  repository_id: REPOSITORY_ID,
+};
+const PAGE_SIZE = 20;
 
 export default function Scans() {
   const navigate = useNavigate();
-  const [filters, setFilters] = useState(EMPTY);
-  const [page, setPage] = useState(1);
-  const list = useAsync(() => api.scans({ ...filters, page, page_size: 20 }), [filters, page]);
+  const { filters, page, list, choose, setPage, reset } = useListSearch({
+    defaults: EMPTY, allowed: ALLOWED, pageSize: PAGE_SIZE, load: api.scans,
+  });
   const repos = useAsync(() => api.repositories(), []);
+  const repositoryOptions = Array.isArray(repos.data) ? repos.data : [];
   usePolling(list.reload, 1500, Boolean(list.data?.items.some((s) => s.status === "queued" || s.status === "running")));
-  const choose = (k, v) => {
-    setPage(1);
-    setFilters((f) => ({ ...f, [k]: v }));
-  };
   const set = (k) => (e) => choose(k, e.target.value);
   const open = (s) => navigate(`/scans/${s.id}`);
 
   return (
     <>
-      <PageHeader title="Scan History" subtitle="Every run, including failed and cancelled ones, with the scanner and ruleset used." />
+      <PageHeader
+        title="Scan History"
+        subtitle="Every run, including failed and cancelled ones, with the scanner and ruleset used."
+        actions={<button type="button" className="btn btn-ghost" onClick={reset}>Reset filters</button>}
+      />
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <ChipGroup label="Result" options={RESULT_CHIPS} value={filters.policy_result} onChange={(v) => choose("policy_result", v)} />
       </div>
@@ -38,7 +47,10 @@ export default function Scans() {
         <Field label="Repository" htmlFor="f-repo">
           <select id="f-repo" className="input" value={filters.repository_id} onChange={set("repository_id")}>
             <option value="">All</option>
-            {(Array.isArray(repos.data) ? repos.data : []).map((r) => (
+            {filters.repository_id && !repositoryOptions.some((r) => r.id === filters.repository_id) && (
+              <option value={filters.repository_id}>{filters.repository_id}</option>
+            )}
+            {repositoryOptions.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.display_name}
               </option>
@@ -58,7 +70,7 @@ export default function Scans() {
         <Field label="Status" htmlFor="f-status">
           <select id="f-status" className="input" value={filters.status} onChange={set("status")}>
             <option value="">Any</option>
-            {["queued", "running", "completed", "failed", "cancelled"].map((s) => (
+            {SCAN_STATUSES.map((s) => (
               <option key={s}>{s}</option>
             ))}
           </select>
@@ -129,7 +141,7 @@ export default function Scans() {
               </tbody>
             </table>
           </div>
-          <Pagination page={page} pageSize={20} total={list.data.total} onPage={setPage} />
+          <Pagination page={page} pageSize={PAGE_SIZE} total={list.data.total} onPage={setPage} />
         </div>
       )}
     </>
