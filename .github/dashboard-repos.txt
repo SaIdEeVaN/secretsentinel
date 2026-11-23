@@ -26,7 +26,6 @@ SaIdEeVaN/PUC
 # Forks of other projects (public):
 SaIdEeVaN/drsivakumardhandapani
 SaIdEeVaN/CDF-MINI-PROJECT
-SaIdEeVaN/BIC_WEB
 SaIdEeVaN/Data-Structure-using-C-Notes
 
 # Private (needs SECRETSENTINEL_REPO_READ_TOKEN):
